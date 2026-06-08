@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>บันทึกการสอนครูนนท์</title>
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23c2703d'/%3E%3C/svg%3E" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet" />
+
+<!-- React + Babel + SheetJS (cdnjs) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- Firebase (gstatic official) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+
+<style>
+  *{ -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{ font-family:'IBM Plex Sans Thai','Sarabun',system-ui,sans-serif; background:#f1f4f8; }
+  #root{ min-height:100vh; }
+  .tl-row:nth-child(even){ background:#f7f9fb; }
+  input[type=date]{ font-family:inherit; }
+  ::-webkit-scrollbar{ height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb{ background:#c7d0db; border-radius:8px; }
+  @media (min-width:560px){
+    .tl-modal-wrap{ align-items:center !important; padding:20px !important; }
+    .tl-modal{ border-radius:16px !important; }
+  }
+  .spin{ animation:sp 1s linear infinite; } @keyframes sp{ to{ transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+/* ==========================================================================
+ *  บันทึกข้อมูลกิจกรรมการสอนครูนนท์ — index.html (ไฟล์เดียวจบ)
+ *  Deploy: อัปไฟล์นี้ขึ้น GitHub repo แล้วเปิด Settings > Pages
+ *  ข้อมูลทั้งหมดบันทึกลง Firestore โดยอัตโนมัติ
+ * ========================================================================== */
+
+const { useState, useEffect, useMemo, useRef, createContext, useContext } = React;
+
+/* ---------- 1) ตั้งค่า Firebase (config ของคุณ) ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyAxFVBHYL1z0DQp-JJt3zPRbxNSSPNHXoA",
+  authDomain: "kru-non-s-teaching-log.firebaseapp.com",
+  projectId: "kru-non-s-teaching-log",
+  storageBucket: "kru-non-s-teaching-log.firebasestorage.app",
+  messagingSenderId: "759717884466",
+  appId: "1:759717884466:web:7155d497d758cf8f65822b",
+};
+
+let db = null, FB = false;
+try {
+  if (typeof firebase !== "undefined") {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    FB = true;
+  }
+} catch (e) { console.warn("Firebase init failed, ใช้โหมดหน่วยความจำ:", e); FB = false; }
+
+/* ---------- ธีมสี / ค่าคงที่ ---------- */
+const C = {
+  navy:"#1f3a5f", navyDark:"#162b46", navySoft:"#eef2f7", accent:"#c2703d",
+  accentSoft:"#fbf0e8", border:"#dde3ea", text:"#1f2933", stripe:"#f7f9fb", white:"#fff",
+};
+const SUB = "#677483";
+const STATUS = {
+  present:{label:"มา",short:"มา",color:"#2e7d52",bg:"#e6f4ec"},
+  absent:{label:"ขาด",short:"ขาด",color:"#c0392b",bg:"#fbeae8"},
+  personal:{label:"ลากิจ",short:"กิจ",color:"#b8860b",bg:"#fbf4e0"},
+  sick:{label:"ลาป่วย",short:"ป่วย",color:"#2c6e9c",bg:"#e6f0f7"},
+  skip:{label:"หนีเรียน",short:"หนี",color:"#7a3ea0",bg:"#f1e8f7"},
+};
+const STATUS_ORDER = ["present","absent","personal","sick","skip"];
+const CARD_COLORS = ["#1f3a5f","#2c6e9c","#c2703d","#3c7a5a","#7a3ea0","#b05c3a"];
+
+const uid = () => Math.random().toString(36).slice(2,10);
+const todayStr = () => new Date().toISOString().slice(0,10);
+const fmtDate = (s) => { if(!s) return ""; const d=new Date(s+"T00:00:00");
+  return d.toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"numeric"}); };
+
+/* ---------- ไอคอน (inline SVG) ---------- */
+function Ico({size=20,children,fill="none"}){
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>{children}</svg>;
+}
+const Settings=(p)=><Ico {...p}><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></Ico>;
+const ChevronLeft=(p)=><Ico {...p}><path d="m15 18-6-6 6-6"/></Ico>;
+const Plus=(p)=><Ico {...p}><path d="M5 12h14"/><path d="M12 5v14"/></Ico>;
+const Trash2=(p)=><Ico {...p}><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></Ico>;
+const Pencil=(p)=><Ico {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></Ico>;
+const Download=(p)=><Ico {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></Ico>;
+const Upload=(p)=><Ico {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></Ico>;
+const CheckSquare=(p)=><Ico {...p}><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></Ico>;
+const ClipboardList=(p)=><Ico {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h.01"/><path d="M12 11h4"/><path d="M8 16h.01"/><path d="M12 16h4"/></Ico>;
+const NotebookPen=(p)=><Ico {...p}><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h2M2 10h2M2 14h2M2 18h2"/><path d="M18.4 2.6a2 2 0 0 1 3 3L16 11l-4 1 1-4Z"/></Ico>;
+const X=(p)=><Ico {...p}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></Ico>;
+const Search=(p)=><Ico {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></Ico>;
+const BookOpen=(p)=><Ico {...p}><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></Ico>;
+const Save=(p)=><Ico {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></Ico>;
+const ImageIcon=(p)=><Ico {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></Ico>;
+const Cloud=(p)=><Ico {...p}><path d="M17.5 19a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.7 1.5A4 4 0 0 0 6 19z"/></Ico>;
+
+/* ---------- Persist (เขียนลง Firestore) ---------- */
+const PersistCtx = createContext(null);
+const usePersist = () => useContext(PersistCtx);
+
+function makePersist(){
+  if(!FB){ // โหมดหน่วยความจำ: ทุกฟังก์ชันเป็น no-op
+    const noop = async()=>{};
+    return { addSubject:noop,updateSubject:noop,deleteSubject:noop,replaceStudents:noop,
+      deleteStudent:noop,setAttendanceDay:noop,addAssignment:noop,updateAssignment:noop,
+      deleteAssignment:noop,setScoreDoc:noop,addNote:noop,updateNote:noop,deleteNote:noop,setLogo:noop };
+  }
+  const col = (n)=>db.collection(n);
+  const deleteWhere = async(name,subjId)=>{
+    const snap = await col(name).where("subjectId","==",subjId).get();
+    await Promise.all(snap.docs.map(d=>d.ref.delete()));
+  };
+  return {
+    addSubject:(s)=>col("subjects").doc(s.id).set({name:s.name,code:s.code,room:s.room,color:s.color,createdAt:s.createdAt||Date.now()}),
+    updateSubject:(id,s)=>col("subjects").doc(id).set({name:s.name,code:s.code,room:s.room,color:s.color},{merge:true}),
+    deleteSubject:async(id)=>{ await col("subjects").doc(id).delete();
+      await Promise.all(["students","assignments","notes","attendance","scores"].map(n=>deleteWhere(n,id))); },
+    replaceStudents:async(subjId,list)=>{ await deleteWhere("students",subjId);
+      const batch=db.batch(); list.forEach(s=>batch.set(col("students").doc(s.id),{subjectId:subjId,number:s.number,name:s.name})); await batch.commit(); },
+    deleteStudent:(id)=>col("students").doc(id).delete(),
+    setAttendanceDay:(subjId,date,marks)=>col("attendance").doc(subjId+"_"+date).set({subjectId:subjId,date,marks}),
+    addAssignment:(subjId,a)=>col("assignments").doc(a.id).set({subjectId:subjId,title:a.title,max:a.max,order:a.order}),
+    updateAssignment:(id,a)=>col("assignments").doc(id).set({title:a.title,max:a.max},{merge:true}),
+    deleteAssignment:(id)=>col("assignments").doc(id).delete(),
+    setScoreDoc:(subjId,studentId,values)=>col("scores").doc(subjId+"_"+studentId).set({subjectId:subjId,studentId,values}),
+    addNote:(subjId,n)=>col("notes").doc(n.id).set({subjectId:subjId,date:n.date,text:n.text}),
+    updateNote:(id,n)=>col("notes").doc(id).set({date:n.date,text:n.text},{merge:true}),
+    deleteNote:(id)=>col("notes").doc(id).delete(),
+    setLogo:(url)=>col("settings").doc("app").set({logoUrl:url}),
+  };
+}
+
+/* ---------- UI primitives ---------- */
+function Btn({children,onClick,variant="primary",size="md",style,title,disabled}){
+  const base={display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,borderRadius:8,
+    cursor:disabled?"not-allowed":"pointer",fontWeight:600,border:"1px solid transparent",fontFamily:"inherit",
+    transition:"all .15s",opacity:disabled?.5:1,whiteSpace:"nowrap",
+    padding:size==="sm"?"6px 10px":"9px 16px",fontSize:size==="sm"?13:14.5};
+  const v={ primary:{background:C.navy,color:"#fff"}, accent:{background:C.accent,color:"#fff"},
+    ghost:{background:"transparent",color:C.navy,border:"1px solid "+C.border},
+    danger:{background:"transparent",color:"#c0392b",border:"1px solid #f0c9c4"},
+    soft:{background:C.navySoft,color:C.navy} };
+  return <button title={title} disabled={disabled} onClick={onClick} style={{...base,...v[variant],...style}}>{children}</button>;
+}
+function Modal({open,onClose,title,children,width=460}){
+  if(!open) return null;
+  return <div className="tl-modal-wrap" onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(22,43,70,.45)",zIndex:60,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div className="tl-modal" onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:width,maxHeight:"88vh",overflow:"auto",border:"1px solid "+C.border}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 18px",borderBottom:"1px solid "+C.border,position:"sticky",top:0,background:"#fff",zIndex:1}}>
+        <h3 style={{margin:0,fontSize:17,color:C.navy,fontWeight:700}}>{title}</h3>
+        <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:SUB}}><X size={22}/></button>
+      </div>
+      <div style={{padding:18}}>{children}</div>
+    </div>
+  </div>;
+}
+function Field({label,children}){ return <label style={{display:"block",marginBottom:14}}>
+  <span style={{display:"block",fontSize:13,fontWeight:600,color:SUB,marginBottom:6}}>{label}</span>{children}</label>; }
+const inputStyle={width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:8,border:"1px solid "+C.border,fontSize:14.5,fontFamily:"inherit",color:C.text,outline:"none",background:"#fff"};
+const tableWrap={background:"#fff",border:"1px solid "+C.border,borderRadius:12,overflow:"auto"};
+const tableStyle={width:"100%",borderCollapse:"collapse",fontSize:14.5};
+const th={background:C.navy,color:"#fff",padding:"11px 12px",textAlign:"center",fontWeight:600,fontSize:13.5,position:"sticky",top:0};
+const td={padding:"10px 12px",borderTop:"1px solid "+C.border,verticalAlign:"middle"};
+const miniIcon={background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:5,padding:3,cursor:"pointer",display:"flex"};
+const cardActBtn={flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,padding:"9px 0",background:"none",border:"none",cursor:"pointer",fontSize:13.5,color:C.navy,fontWeight:600,fontFamily:"inherit"};
+const panel={background:"#fff",border:"1px solid "+C.border,borderRadius:12,padding:16};
+const panelHead={display:"flex",alignItems:"center",gap:8,fontSize:16,fontWeight:700,color:C.navy,marginBottom:14};
+function SectionHead({title,right}){ return <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10,flexWrap:"wrap"}}>
+  <h2 style={{margin:0,fontSize:19,color:C.navy}}>{title}</h2>{right}</div>; }
+function EmptyHint({text}){ return <div style={{gridColumn:"1/-1",textAlign:"center",color:SUB,padding:36,background:"#fff",border:"1px dashed "+C.border,borderRadius:12,fontSize:14.5}}>{text}</div>; }
+
+/* ==================== APP ==================== */
+function App(){
+  const [subjects,setSubjects]=useState([]);
+  const [students,setStudents]=useState({});
+  const [attendance,setAttendance]=useState({});
+  const [assignments,setAssignments]=useState({});
+  const [scores,setScores]=useState({});
+  const [notes,setNotes]=useState({});
+  const [logoUrl,setLogoUrl]=useState("");
+  const [loading,setLoading]=useState(true);
+  const [view,setView]=useState("home");
+  const [activeSubj,setActiveSubj]=useState(null);
+  const persist = useMemo(()=>makePersist(),[]);
+
+  // โหลดข้อมูลครั้งแรกจาก Firestore
+  useEffect(()=>{
+    let alive=true;
+    async function load(){
+      if(!FB){ // seed ตัวอย่างในโหมดหน่วยความจำ
+        setSubjects([{id:"s1",name:"วิทยาการคำนวณ",code:"ว21104",room:"ม.1/1",color:CARD_COLORS[0],createdAt:1}]);
+        setStudents({s1:[{id:"a1",number:1,name:"เด็กชายกิตติ ใจดี"},{id:"a2",number:2,name:"เด็กหญิงนภา ศรีสุข"}]});
+        setLoading(false); return;
+      }
+      try{
+        const [sub,stu,att,asg,sco,note,setDoc]=await Promise.all([
+          db.collection("subjects").get(),db.collection("students").get(),
+          db.collection("attendance").get(),db.collection("assignments").get(),
+          db.collection("scores").get(),db.collection("notes").get(),
+          db.collection("settings").doc("app").get(),
+        ]);
+        if(!alive) return;
+        setSubjects(sub.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)));
+        const stuObj={}; stu.docs.forEach(d=>{const x={id:d.id,...d.data()}; (stuObj[x.subjectId]=stuObj[x.subjectId]||[]).push(x);});
+        Object.keys(stuObj).forEach(k=>stuObj[k].sort((a,b)=>(a.number||0)-(b.number||0))); setStudents(stuObj);
+        const attObj={}; att.docs.forEach(d=>{const x=d.data(); attObj[x.subjectId]=attObj[x.subjectId]||{}; attObj[x.subjectId][x.date]=x.marks||{};}); setAttendance(attObj);
+        const asgObj={}; asg.docs.forEach(d=>{const x={id:d.id,...d.data()}; (asgObj[x.subjectId]=asgObj[x.subjectId]||[]).push(x);});
+        Object.keys(asgObj).forEach(k=>asgObj[k].sort((a,b)=>(a.order||0)-(b.order||0))); setAssignments(asgObj);
+        const scoObj={}; sco.docs.forEach(d=>{const x=d.data(); scoObj[x.subjectId]=scoObj[x.subjectId]||{}; scoObj[x.subjectId][x.studentId]=x.values||{};}); setScores(scoObj);
+        const noteObj={}; note.docs.forEach(d=>{const x={id:d.id,...d.data()}; (noteObj[x.subjectId]=noteObj[x.subjectId]||[]).push(x);}); setNotes(noteObj);
+        if(setDoc.exists) setLogoUrl(setDoc.data().logoUrl||"");
+      }catch(e){ console.error("โหลดข้อมูลล้มเหลว:",e); }
+      if(alive) setLoading(false);
+    }
+    load(); return ()=>{alive=false;};
+  },[]);
+
+  useEffect(()=>{ if(!logoUrl) return; const l=document.getElementById("favicon"); if(l) l.href=logoUrl; },[logoUrl]);
+
+  const subj = subjects.find(s=>s.id===activeSubj);
+  const openSubject=(id)=>{ setActiveSubj(id); setView("class"); };
+
+  if(loading) return <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",color:SUB,gap:14}}>
+    <div className="spin" style={{color:C.accent}}><Cloud size={40}/></div><div>กำลังโหลดข้อมูล...</div></div>;
+
+  return <PersistCtx.Provider value={persist}>
+  <div style={{minHeight:"100vh",color:C.text}}>
+    <header style={{background:C.navy,color:"#fff",position:"sticky",top:0,zIndex:40,borderBottom:"3px solid "+C.accent}}>
+      <div style={{maxWidth:920,margin:"0 auto",padding:"11px 16px",display:"flex",alignItems:"center",gap:12}}>
+        {view!=="home" && <button onClick={()=>setView(view==="class"?"home":"class")} style={{background:"rgba(255,255,255,.12)",border:"none",color:"#fff",borderRadius:8,padding:7,cursor:"pointer",display:"flex"}}><ChevronLeft size={20}/></button>}
+        {logoUrl ? <img src={logoUrl} alt="logo" style={{width:34,height:34,borderRadius:8,objectFit:"cover",background:"#fff"}}/> :
+          <div style={{width:34,height:34,borderRadius:8,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center"}}><BookOpen size={19}/></div>}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:700,fontSize:16,lineHeight:1.15}}>บันทึกการสอนครูนนท์</div>
+          <div style={{fontSize:12,color:"#b9c6d6"}}>{view==="home"?"รายวิชาที่รับผิดชอบ":subj?subj.name+" · "+subj.room:"ตั้งค่าระบบ"}</div>
+        </div>
+        <button onClick={()=>setView("settings")} title="ตั้งค่า" style={{background:view==="settings"?C.accent:"rgba(255,255,255,.12)",border:"none",color:"#fff",borderRadius:8,padding:8,cursor:"pointer",display:"flex"}}><Settings size={20}/></button>
+      </div>
+    </header>
+    {!FB && <div style={{background:"#fbf4e0",color:"#8a6d1b",fontSize:13,textAlign:"center",padding:"7px 12px"}}>โหมดทดลอง (ยังไม่ได้ต่อ Firestore) — ข้อมูลจะไม่ถูกบันทึก เมื่อ deploy บน GitHub Pages จะบันทึกอัตโนมัติ</div>}
+    <main style={{maxWidth:920,margin:"0 auto",padding:16,paddingBottom:60}}>
+      {view==="home" && <HomeView subjects={subjects} setSubjects={setSubjects} openSubject={openSubject} students={students} setStudents={setStudents}/>}
+      {view==="class" && subj && <ClassView subj={subj} setView={setView} students={students[subj.id]||[]}/>}
+      {view==="attendance" && subj && <AttendanceView subj={subj} students={students[subj.id]||[]} attendance={attendance} setAttendance={setAttendance}/>}
+      {view==="scores" && subj && <ScoresView subj={subj} students={students[subj.id]||[]} assignments={assignments} setAssignments={setAssignments} scores={scores} setScores={setScores}/>}
+      {view==="notes" && subj && <NotesView subj={subj} notes={notes} setNotes={setNotes}/>}
+      {view==="settings" && <SettingsView subjects={subjects} students={students} setStudents={setStudents} logoUrl={logoUrl} setLogoUrl={setLogoUrl}/>}
+    </main>
+  </div>
+  </PersistCtx.Provider>;
+}
+
+/* ---------- HOME ---------- */
+function HomeView({subjects,setSubjects,openSubject,students,setStudents}){
+  const persist=usePersist();
+  const [modal,setModal]=useState(null);
+  const [form,setForm]=useState({name:"",code:"",room:"",color:CARD_COLORS[0]});
+  const openAdd=()=>{ setForm({name:"",code:"",room:"",color:CARD_COLORS[subjects.length%CARD_COLORS.length]}); setModal({mode:"add"}); };
+  const openEdit=(s)=>{ setForm({...s}); setModal({mode:"edit",id:s.id}); };
+  const save=()=>{
+    if(!form.name.trim()) return;
+    if(modal.mode==="add"){ const id=uid(); const rec={...form,id,createdAt:Date.now()};
+      setSubjects([...subjects,rec]); setStudents(p=>({...p,[id]:[]})); persist.addSubject(rec);
+    } else { setSubjects(subjects.map(s=>s.id===modal.id?{...s,...form}:s)); persist.updateSubject(modal.id,form); }
+    setModal(null);
+  };
+  const remove=(id)=>{ if(!window.confirm("ลบรายวิชานี้และข้อมูลทั้งหมด?")) return;
+    setSubjects(subjects.filter(s=>s.id!==id)); persist.deleteSubject(id); };
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+      <h2 style={{margin:0,fontSize:19,color:C.navy}}>รายวิชาที่รับผิดชอบ</h2>
+      <Btn variant="accent" onClick={openAdd}><Plus size={17}/>เพิ่มวิชา</Btn>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12}}>
+      {subjects.map(s=><div key={s.id} style={{background:"#fff",border:"1px solid "+C.border,borderRadius:12,overflow:"hidden"}}>
+        <div onClick={()=>openSubject(s.id)} style={{cursor:"pointer"}}>
+          <div style={{height:6,background:s.color}}/>
+          <div style={{padding:"14px 16px"}}>
+            <div style={{fontSize:12,color:SUB,fontWeight:600}}>{s.code||"—"}</div>
+            <div style={{fontSize:17,fontWeight:700,color:C.navy,margin:"2px 0 6px"}}>{s.name}</div>
+            <div style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:13,color:SUB,background:C.navySoft,padding:"3px 9px",borderRadius:20}}>ห้อง {s.room||"—"} · {(students[s.id]||[]).length} คน</div>
+          </div>
+        </div>
+        <div style={{display:"flex",borderTop:"1px solid "+C.border}}>
+          <button onClick={()=>openEdit(s)} style={cardActBtn}><Pencil size={15}/>แก้ไข</button>
+          <button onClick={()=>remove(s.id)} style={{...cardActBtn,color:"#c0392b",borderLeft:"1px solid "+C.border}}><Trash2 size={15}/>ลบ</button>
+        </div>
+      </div>)}
+      {subjects.length===0 && <EmptyHint text="ยังไม่มีรายวิชา กดปุ่ม “เพิ่มวิชา”"/>}
+    </div>
+    <Modal open={!!modal} onClose={()=>setModal(null)} title={modal&&modal.mode==="add"?"เพิ่มรายวิชา":"แก้ไขรายวิชา"}>
+      <Field label="ชื่อวิชา"><input style={inputStyle} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="เช่น วิทยาการคำนวณ"/></Field>
+      <Field label="รหัสวิชา"><input style={inputStyle} value={form.code} onChange={e=>setForm({...form,code:e.target.value})} placeholder="เช่น ว21104"/></Field>
+      <Field label="ห้องเรียน"><input style={inputStyle} value={form.room} onChange={e=>setForm({...form,room:e.target.value})} placeholder="เช่น ม.1/1"/></Field>
+      <Field label="สีประจำวิชา"><div style={{display:"flex",gap:8}}>
+        {CARD_COLORS.map(c=><button key={c} onClick={()=>setForm({...form,color:c})} style={{width:30,height:30,borderRadius:8,background:c,cursor:"pointer",border:form.color===c?"3px solid "+C.navy:"2px solid #fff",outline:form.color===c?"1px solid "+C.navy:"none"}}/>)}
+      </div></Field>
+      <Btn variant="primary" onClick={save} style={{width:"100%"}}><Save size={16}/>บันทึก</Btn>
+    </Modal>
+  </div>;
+}
+
+/* ---------- CLASS ---------- */
+function ClassView({subj,setView,students}){
+  const cards=[
+    {key:"attendance",icon:CheckSquare,title:"เช็คชื่อ",desc:"บันทึกการมาเรียนรายวัน",color:"#2c6e9c"},
+    {key:"scores",icon:ClipboardList,title:"เช็คคะแนน",desc:"บันทึกคะแนนงาน/ชิ้นงาน",color:C.accent},
+    {key:"notes",icon:NotebookPen,title:"บันทึกช่วยจำ",desc:"โน้ตประจำชั้นเรียน",color:"#3c7a5a"},
+  ];
+  return <div>
+    <div style={{background:"#fff",border:"1px solid "+C.border,borderRadius:12,padding:"16px 18px",marginBottom:14}}>
+      <div style={{fontSize:13,color:SUB,fontWeight:600}}>{subj.code}</div>
+      <div style={{fontSize:21,fontWeight:700,color:C.navy}}>{subj.name}</div>
+      <div style={{fontSize:14,color:SUB,marginTop:2}}>ห้อง {subj.room} · นักเรียน {students.length} คน</div>
+    </div>
+    <div style={{display:"grid",gap:12}}>
+      {cards.map(c=><button key={c.key} onClick={()=>setView(c.key)} style={{display:"flex",alignItems:"center",gap:14,textAlign:"left",background:"#fff",border:"1px solid "+C.border,borderRadius:12,padding:"16px 18px",cursor:"pointer",fontFamily:"inherit"}}>
+        <div style={{width:48,height:48,borderRadius:10,background:c.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><c.icon size={24}/></div>
+        <div style={{flex:1}}><div style={{fontSize:17,fontWeight:700,color:C.navy}}>{c.title}</div><div style={{fontSize:13.5,color:SUB}}>{c.desc}</div></div>
+        <div style={{transform:"rotate(180deg)",color:SUB}}><ChevronLeft size={20}/></div>
+      </button>)}
+    </div>
+  </div>;
+}
+
+/* ---------- ATTENDANCE ---------- */
+function AttendanceView({subj,students,attendance,setAttendance}){
+  const persist=usePersist();
+  const [date,setDate]=useState(todayStr());
+  const dayData = (attendance[subj.id]&&attendance[subj.id][date])||{};
+  const setStatus=(studentId,status)=>{
+    const cur=(attendance[subj.id]&&attendance[subj.id][date])||{};
+    const day={...cur};
+    if(day[studentId]===status) delete day[studentId]; else day[studentId]=status;
+    setAttendance(p=>({...p,[subj.id]:{...(p[subj.id]||{}),[date]:day}}));
+    persist.setAttendanceDay(subj.id,date,day);
+  };
+  const markAll=(status)=>{ const day={}; students.forEach(s=>day[s.id]=status);
+    setAttendance(p=>({...p,[subj.id]:{...(p[subj.id]||{}),[date]:day}})); persist.setAttendanceDay(subj.id,date,day); };
+  const counts=useMemo(()=>{ const c={present:0,absent:0,personal:0,sick:0,skip:0};
+    Object.values(dayData).forEach(v=>{ if(c[v]!=null) c[v]++; }); return c; },[dayData]);
+  const exportXlsx=()=>{
+    const subjA=attendance[subj.id]||{}; const dates=Object.keys(subjA).sort();
+    const header=["เลขที่","ชื่อ-สกุล",...dates.map(fmtDate)];
+    const rows=students.map(s=>[s.number,s.name,...dates.map(d=>(subjA[d]&&subjA[d][s.id])?STATUS[subjA[d][s.id]].label:"")]);
+    const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
+    ws["!cols"]=[{wch:7},{wch:26},...dates.map(()=>({wch:10}))];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"เช็คชื่อ");
+    XLSX.writeFile(wb,"เช็คชื่อ_"+subj.name+"_"+subj.room+".xlsx");
+  };
+  return <div>
+    <SectionHead title="เช็คชื่อ" right={<Btn variant="accent" size="sm" onClick={exportXlsx}><Download size={15}/>Export .xlsx</Btn>}/>
+    <div style={{background:"#fff",border:"1px solid "+C.border,borderRadius:12,padding:14,marginBottom:12}}>
+      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        <span style={{fontSize:13,fontWeight:600,color:SUB}}>วันที่</span>
+        <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{...inputStyle,width:"auto",padding:"8px 10px"}}/>
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:12}}>
+        {STATUS_ORDER.map(k=><span key={k} style={{fontSize:12.5,padding:"3px 9px",borderRadius:20,background:STATUS[k].bg,color:STATUS[k].color,fontWeight:600}}>{STATUS[k].label} {counts[k]}</span>)}
+        <button onClick={()=>markAll("present")} style={{marginLeft:"auto",fontSize:12.5,color:C.navy,background:C.navySoft,border:"none",borderRadius:20,padding:"4px 11px",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>เลือก “มา” ทั้งหมด</button>
+      </div>
+    </div>
+    <div style={tableWrap}><table style={tableStyle}>
+      <thead><tr><th style={{...th,width:44}}>#</th><th style={{...th,textAlign:"left"}}>ชื่อ-สกุล</th><th style={{...th,minWidth:230}}>สถานะ</th></tr></thead>
+      <tbody>
+        {students.map(s=><tr key={s.id} className="tl-row">
+          <td style={{...td,textAlign:"center",color:SUB}}>{s.number}</td>
+          <td style={td}>{s.name}</td>
+          <td style={td}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+            {STATUS_ORDER.map(k=>{ const on=dayData[s.id]===k;
+              return <button key={k} onClick={()=>setStatus(s.id,k)} style={{fontSize:12.5,padding:"5px 9px",borderRadius:8,cursor:"pointer",fontWeight:600,fontFamily:"inherit",border:on?"1px solid "+STATUS[k].color:"1px solid "+C.border,background:on?STATUS[k].color:"#fff",color:on?"#fff":SUB}}>{STATUS[k].short}</button>;
+            })}
+          </div></td>
+        </tr>)}
+        {students.length===0 && <tr><td colSpan={3} style={{...td,textAlign:"center",color:SUB,padding:28}}>ยังไม่มีรายชื่อนักเรียน — เพิ่มได้ที่เมนู “ตั้งค่า”</td></tr>}
+      </tbody>
+    </table></div>
+  </div>;
+}
+
+/* ---------- SCORES ---------- */
+function ScoresView({subj,students,assignments,setAssignments,scores,setScores}){
+  const persist=usePersist();
+  const list=assignments[subj.id]||[];
+  const subjScores=scores[subj.id]||{};
+  const [modal,setModal]=useState(null);
+  const [aForm,setAForm]=useState({title:"",max:10});
+  const addAssignment=()=>{ if(!aForm.title.trim()) return;
+    const item={id:uid(),title:aForm.title.trim(),max:Number(aForm.max)||0,order:Date.now()};
+    setAssignments(p=>({...p,[subj.id]:[...(p[subj.id]||[]),item]})); persist.addAssignment(subj.id,item);
+    setModal(null); setAForm({title:"",max:10}); };
+  const editAssignment=()=>{ const upd={title:aForm.title.trim(),max:Number(aForm.max)||0};
+    setAssignments(p=>({...p,[subj.id]:(p[subj.id]||[]).map(a=>a.id===modal.id?{...a,...upd}:a)})); persist.updateAssignment(modal.id,upd); setModal(null); };
+  const removeAssignment=(id)=>{ if(!window.confirm("ลบหัวข้องานนี้?")) return;
+    setAssignments(p=>({...p,[subj.id]:(p[subj.id]||[]).filter(a=>a.id!==id)})); persist.deleteAssignment(id); };
+  const setScore=(studentId,aId,val)=>{
+    const row={...(subjScores[studentId]||{})}; if(val==="") delete row[aId]; else row[aId]=val;
+    setScores(p=>({...p,[subj.id]:{...(p[subj.id]||{}),[studentId]:row}})); persist.setScoreDoc(subj.id,studentId,row);
+  };
+  const rowTotal=(studentId)=>list.reduce((sum,a)=>sum+(Number(subjScores[studentId]&&subjScores[studentId][a.id])||0),0);
+  const totalMax=list.reduce((s,a)=>s+(a.max||0),0);
+  const exportXlsx=()=>{
+    const header=["เลขที่","ชื่อ-สกุล",...list.map(a=>a.title+" ("+a.max+")"),"รวม ("+totalMax+")"];
+    const rows=students.map(s=>[s.number,s.name,...list.map(a=>(subjScores[s.id]&&subjScores[s.id][a.id])!=null?subjScores[s.id][a.id]:""),rowTotal(s.id)]);
+    const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
+    ws["!cols"]=[{wch:7},{wch:26},...list.map(()=>({wch:14})),{wch:10}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"คะแนน");
+    XLSX.writeFile(wb,"คะแนน_"+subj.name+"_"+subj.room+".xlsx");
+  };
+  return <div>
+    <SectionHead title="เช็คคะแนน" right={<div style={{display:"flex",gap:8}}>
+      <Btn variant="ghost" size="sm" onClick={()=>{setAForm({title:"",max:10});setModal({mode:"add"});}}><Plus size={15}/>เพิ่มงาน</Btn>
+      <Btn variant="accent" size="sm" onClick={exportXlsx}><Download size={15}/>Export</Btn>
+    </div>}/>
+    <div style={tableWrap}><table style={tableStyle}>
+      <thead><tr>
+        <th style={{...th,width:40}}>#</th>
+        <th style={{...th,textAlign:"left",minWidth:150,position:"sticky",left:0,background:C.navy,zIndex:2}}>ชื่อ-สกุล</th>
+        {list.map(a=><th key={a.id} style={{...th,minWidth:96}}>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+            <span style={{lineHeight:1.2}}>{a.title}</span>
+            <span style={{fontWeight:400,fontSize:11,color:"#c7d4e2"}}>เต็ม {a.max}</span>
+            <div style={{display:"flex",gap:4}}>
+              <button onClick={()=>{setAForm({title:a.title,max:a.max});setModal({mode:"edit",id:a.id});}} style={miniIcon}><Pencil size={12}/></button>
+              <button onClick={()=>removeAssignment(a.id)} style={{...miniIcon,color:"#ffd0c8"}}><Trash2 size={12}/></button>
+            </div>
+          </div></th>)}
+        <th style={{...th,minWidth:70,background:C.navyDark}}>รวม<br/><span style={{fontWeight:400,fontSize:11,color:"#c7d4e2"}}>{totalMax}</span></th>
+      </tr></thead>
+      <tbody>
+        {students.map(s=><tr key={s.id} className="tl-row">
+          <td style={{...td,textAlign:"center",color:SUB}}>{s.number}</td>
+          <td style={{...td,position:"sticky",left:0,background:"inherit",fontWeight:500}}>{s.name}</td>
+          {list.map(a=><td key={a.id} style={{...td,padding:4}}>
+            <input type="number" value={(subjScores[s.id]&&subjScores[s.id][a.id])!=null?subjScores[s.id][a.id]:""} onChange={e=>setScore(s.id,a.id,e.target.value)}
+              style={{width:64,textAlign:"center",padding:"6px 4px",border:"1px solid "+C.border,borderRadius:6,fontFamily:"inherit",fontSize:14,outline:"none"}}/>
+          </td>)}
+          <td style={{...td,textAlign:"center",fontWeight:700,color:C.accent,background:C.accentSoft}}>{rowTotal(s.id)}</td>
+        </tr>)}
+        {students.length===0 && <tr><td colSpan={3+list.length} style={{...td,textAlign:"center",color:SUB,padding:28}}>ยังไม่มีรายชื่อนักเรียน</td></tr>}
+        {students.length>0 && list.length===0 && <tr><td colSpan={3} style={{...td,textAlign:"center",color:SUB,padding:22}}>กด “เพิ่มงาน” เพื่อสร้างหัวข้อเก็บคะแนน</td></tr>}
+      </tbody>
+    </table></div>
+    <Modal open={!!modal} onClose={()=>setModal(null)} title={modal&&modal.mode==="add"?"เพิ่มหัวข้องาน":"แก้ไขหัวข้องาน"}>
+      <Field label="ชื่องาน / ชิ้นงาน"><input style={inputStyle} value={aForm.title} onChange={e=>setAForm({...aForm,title:e.target.value})} placeholder="เช่น ใบงานที่ 1"/></Field>
+      <Field label="คะแนนเต็ม"><input type="number" style={inputStyle} value={aForm.max} onChange={e=>setAForm({...aForm,max:e.target.value})}/></Field>
+      <Btn variant="primary" onClick={modal&&modal.mode==="add"?addAssignment:editAssignment} style={{width:"100%"}}><Save size={16}/>บันทึก</Btn>
+    </Modal>
+  </div>;
+}
+
+/* ---------- NOTES ---------- */
+function NotesView({subj,notes,setNotes}){
+  const persist=usePersist();
+  const list=(notes[subj.id]||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const [modal,setModal]=useState(null);
+  const [form,setForm]=useState({date:todayStr(),text:""});
+  const [filterFrom,setFilterFrom]=useState(""); const [filterTo,setFilterTo]=useState(""); const [q,setQ]=useState("");
+  const filtered=list.filter(n=>(!filterFrom||n.date>=filterFrom)&&(!filterTo||n.date<=filterTo)&&(!q||n.text.toLowerCase().includes(q.toLowerCase())));
+  const save=()=>{ if(!form.text.trim()) return;
+    if(modal.mode==="add"){ const rec={id:uid(),date:form.date,text:form.text.trim()};
+      setNotes(p=>({...p,[subj.id]:[...(p[subj.id]||[]),rec]})); persist.addNote(subj.id,rec);
+    } else { const upd={date:form.date,text:form.text.trim()};
+      setNotes(p=>({...p,[subj.id]:(p[subj.id]||[]).map(n=>n.id===modal.id?{...n,...upd}:n)})); persist.updateNote(modal.id,upd); }
+    setModal(null); };
+  const remove=(id)=>{ if(!window.confirm("ลบบันทึกนี้?")) return;
+    setNotes(p=>({...p,[subj.id]:(p[subj.id]||[]).filter(n=>n.id!==id)})); persist.deleteNote(id); };
+  return <div>
+    <SectionHead title="บันทึกช่วยจำ" right={<Btn variant="accent" size="sm" onClick={()=>{setForm({date:todayStr(),text:""});setModal({mode:"add"});}}><Plus size={16}/>เพิ่มบันทึก</Btn>}/>
+    <div style={{background:"#fff",border:"1px solid "+C.border,borderRadius:12,padding:14,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,border:"1px solid "+C.border,borderRadius:8,padding:"8px 10px"}}>
+        <Search size={16}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาข้อความในบันทึก..." style={{border:"none",outline:"none",flex:1,fontFamily:"inherit",fontSize:14}}/>
+      </div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+        <span style={{fontSize:13,color:SUB,fontWeight:600}}>ช่วงวันที่</span>
+        <input type="date" value={filterFrom} onChange={e=>setFilterFrom(e.target.value)} style={{...inputStyle,width:"auto",padding:"7px 9px"}}/>
+        <span style={{color:SUB}}>–</span>
+        <input type="date" value={filterTo} onChange={e=>setFilterTo(e.target.value)} style={{...inputStyle,width:"auto",padding:"7px 9px"}}/>
+        {(filterFrom||filterTo||q)&&<button onClick={()=>{setFilterFrom("");setFilterTo("");setQ("");}} style={{fontSize:12.5,color:C.accent,background:"none",border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>ล้างตัวกรอง</button>}
+      </div>
+    </div>
+    <div style={{display:"grid",gap:10}}>
+      {filtered.map(n=><div key={n.id} style={{background:"#fff",border:"1px solid "+C.border,borderRadius:12,padding:"13px 15px",borderLeft:"4px solid "+C.accent}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+          <span style={{fontSize:13,fontWeight:700,color:C.navy,background:C.navySoft,padding:"3px 10px",borderRadius:20}}>{fmtDate(n.date)}</span>
+          <div style={{display:"flex",gap:4}}>
+            <button onClick={()=>{setForm({date:n.date,text:n.text});setModal({mode:"edit",id:n.id});}} style={{...miniIcon,background:C.navySoft,color:C.navy}}><Pencil size={14}/></button>
+            <button onClick={()=>remove(n.id)} style={{...miniIcon,background:"#fbeae8",color:"#c0392b"}}><Trash2 size={14}/></button>
+          </div>
+        </div>
+        <div style={{fontSize:14.5,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{n.text}</div>
+      </div>)}
+      {filtered.length===0 && <EmptyHint text={list.length===0?"ยังไม่มีบันทึก กด “เพิ่มบันทึก”":"ไม่พบบันทึกตามตัวกรอง"}/>}
+    </div>
+    <Modal open={!!modal} onClose={()=>setModal(null)} title={modal&&modal.mode==="add"?"เพิ่มบันทึก":"แก้ไขบันทึก"}>
+      <Field label="วันที่"><input type="date" style={inputStyle} value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></Field>
+      <Field label="รายละเอียด"><textarea style={{...inputStyle,minHeight:120,resize:"vertical"}} value={form.text} onChange={e=>setForm({...form,text:e.target.value})} placeholder="พิมพ์บันทึกช่วยจำ..."/></Field>
+      <Btn variant="primary" onClick={save} style={{width:"100%"}}><Save size={16}/>บันทึก</Btn>
+    </Modal>
+  </div>;
+}
+
+/* ---------- SETTINGS ---------- */
+function SettingsView({subjects,students,setStudents,logoUrl,setLogoUrl}){
+  const persist=usePersist();
+  const [target,setTarget]=useState((subjects[0]&&subjects[0].id)||"");
+  const [pasteText,setPasteText]=useState("");
+  const [logoInput,setLogoInput]=useState(logoUrl);
+  const fileRef=useRef();
+  useEffect(()=>{ if(!target && subjects[0]) setTarget(subjects[0].id); },[subjects]);
+  const parseNames=(text)=>text.split("\n").map(l=>l.trim()).filter(Boolean).map((line,i)=>{
+    const m=line.split(/[,\t]/).map(x=>x.trim());
+    if(m.length>=2 && /^\d+$/.test(m[0])) return {id:uid(),number:Number(m[0]),name:m.slice(1).join(" ")};
+    return {id:uid(),number:i+1,name:line};
+  });
+  const importPaste=()=>{ if(!target) return alert("ยังไม่มีรายวิชา");
+    const parsed=parseNames(pasteText); if(!parsed.length) return;
+    setStudents(p=>({...p,[target]:parsed})); persist.replaceStudents(target,parsed); setPasteText(""); alert("นำเข้า "+parsed.length+" รายชื่อสำเร็จ"); };
+  const importFile=(e)=>{ const file=e.target.files[0]; if(!file||!target) return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{ const wb=XLSX.read(new Uint8Array(ev.target.result),{type:"array"});
+      const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{header:1}); const parsed=[];
+      rows.forEach((r,i)=>{ if(!r||!r.length) return; const first=String(r[0]!=null?r[0]:"").trim();
+        if(i===0 && !/^\d+$/.test(first)) return;
+        if(/^\d+$/.test(first) && r[1]) parsed.push({id:uid(),number:Number(first),name:String(r[1]).trim()});
+        else if(first) parsed.push({id:uid(),number:parsed.length+1,name:first}); });
+      if(parsed.length){ setStudents(p=>({...p,[target]:parsed})); persist.replaceStudents(target,parsed); alert("นำเข้าจากไฟล์ "+parsed.length+" รายชื่อสำเร็จ"); }
+      else alert("ไม่พบข้อมูลในไฟล์"); };
+    reader.readAsArrayBuffer(file); e.target.value=""; };
+  const currentList=students[target]||[];
+  const removeStudent=(id)=>{ setStudents(p=>({...p,[target]:(p[target]||[]).filter(s=>s.id!==id)})); persist.deleteStudent(id); };
+  return <div style={{display:"grid",gap:14}}>
+    <h2 style={{margin:0,fontSize:19,color:C.navy}}>ตั้งค่าระบบ</h2>
+    <div style={panel}>
+      <div style={panelHead}><Upload size={18}/> นำเข้ารายชื่อนักเรียน</div>
+      <Field label="เลือกรายวิชา"><select style={inputStyle} value={target} onChange={e=>setTarget(e.target.value)}>
+        {subjects.map(s=><option key={s.id} value={s.id}>{s.name} ({s.room})</option>)}
+      </select></Field>
+      <Field label="วางรายชื่อ (1 บรรทัด/คน — รองรับ “เลขที่,ชื่อ” หรือชื่ออย่างเดียว)">
+        <textarea style={{...inputStyle,minHeight:110,resize:"vertical"}} value={pasteText} onChange={e=>setPasteText(e.target.value)} placeholder={"1,เด็กชายสมชาย ใจดี\n2,เด็กหญิงสมหญิง รักเรียน"}/>
+      </Field>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        <Btn variant="primary" onClick={importPaste}><Upload size={15}/>นำเข้าจากข้อความ</Btn>
+        <Btn variant="ghost" onClick={()=>fileRef.current&&fileRef.current.click()}><Upload size={15}/>นำเข้าจากไฟล์ .xlsx / .csv</Btn>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={importFile} style={{display:"none"}}/>
+      </div>
+      {currentList.length>0 && <div style={{marginTop:14}}>
+        <div style={{fontSize:13,fontWeight:600,color:SUB,marginBottom:6}}>รายชื่อปัจจุบัน ({currentList.length} คน)</div>
+        <div style={{...tableWrap,maxHeight:240}}><table style={tableStyle}>
+          <thead><tr><th style={{...th,width:44}}>#</th><th style={{...th,textAlign:"left"}}>ชื่อ-สกุล</th><th style={{...th,width:56}}></th></tr></thead>
+          <tbody>{currentList.map(s=><tr key={s.id} className="tl-row">
+            <td style={{...td,textAlign:"center",color:SUB}}>{s.number}</td><td style={td}>{s.name}</td>
+            <td style={{...td,textAlign:"center"}}><button onClick={()=>removeStudent(s.id)} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer"}}><Trash2 size={15}/></button></td>
+          </tr>)}</tbody>
+        </table></div>
+      </div>}
+    </div>
+    <div style={panel}>
+      <div style={panelHead}><ImageIcon size={18}/> โลโก้ระบบ (ใช้เป็น favicon ด้วย)</div>
+      <Field label="ลิงก์รูปโลโก้ (URL)"><input style={inputStyle} value={logoInput} onChange={e=>setLogoInput(e.target.value)} placeholder="https://.../logo.png"/></Field>
+      <div style={{display:"flex",gap:12,alignItems:"center"}}>
+        <Btn variant="primary" onClick={()=>{ const u=logoInput.trim(); setLogoUrl(u); persist.setLogo(u); }}><Save size={15}/>บันทึกโลโก้</Btn>
+        {logoInput && <img src={logoInput} alt="preview" style={{width:44,height:44,borderRadius:8,objectFit:"cover",border:"1px solid "+C.border}}/>}
+      </div>
+    </div>
+    <div style={{...panel,fontSize:13,color:SUB,lineHeight:1.6}}>
+      <div style={panelHead}><Cloud size={18}/> สถานะฐานข้อมูล</div>
+      {FB ? "เชื่อมต่อ Firestore แล้ว — ข้อมูลถูกบันทึกอัตโนมัติ" : "ยังไม่ได้เชื่อมต่อ Firestore (กำลังรันในโหมดทดลอง) เมื่อเปิดผ่าน GitHub Pages ระบบจะเชื่อมต่ออัตโนมัติ"}
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
