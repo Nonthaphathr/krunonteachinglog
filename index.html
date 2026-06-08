@@ -495,9 +495,9 @@ function ScoresView({subj,students,assignments,setAssignments,scores,setScores})
         {students.map(s=><tr key={s.id} className="tl-row">
           <td style={{...td,textAlign:"center",color:SUB}}>{s.number}</td>
           <td style={{...td,position:"sticky",left:0,background:"inherit",fontWeight:500}}>{s.name}</td>
-          {list.map(a=><td key={a.id} style={{...td,padding:4}}>
-            <input type="number" value={(subjScores[s.id]&&subjScores[s.id][a.id])!=null?subjScores[s.id][a.id]:""} onChange={e=>setScore(s.id,a.id,e.target.value)}
-              style={{width:64,textAlign:"center",padding:"6px 4px",border:"1px solid "+C.border,borderRadius:6,fontFamily:"inherit",fontSize:14,outline:"none"}}/>
+          {list.map(a=><td key={a.id} style={{...td,padding:4,textAlign:"center"}}>
+            <input type="text" inputMode="decimal" value={(subjScores[s.id]&&subjScores[s.id][a.id])!=null?subjScores[s.id][a.id]:""} onChange={e=>setScore(s.id,a.id,e.target.value)}
+              style={{width:72,textAlign:"center",padding:"7px 4px",border:"1px solid "+C.border,borderRadius:6,fontFamily:"inherit",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
           </td>)}
           <td style={{...td,textAlign:"center",fontWeight:700,color:C.accent,background:C.accentSoft}}>{rowTotal(s.id)}</td>
         </tr>)}
