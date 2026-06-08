@@ -85,6 +85,44 @@ const todayStr = () => new Date().toISOString().slice(0,10);
 const fmtDate = (s) => { if(!s) return ""; const d=new Date(s+"T00:00:00");
   return d.toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"numeric"}); };
 
+/* แปลงคำอ่านเลขไทย / เลขไทย ๑๒๓ -> ตัวเลขอารบิก  (คืนค่าเดิมถ้าแปลงไม่ได้) */
+const TH_DIGIT={ศูนย์:0,หนึ่ง:1,เอ็ด:1,สอง:2,ยี่:2,สาม:3,สี่:4,ห้า:5,หก:6,เจ็ด:7,แปด:8,เก้า:9};
+const TH_UNIT={สิบ:10,ร้อย:100,พัน:1000,หมื่น:10000,แสน:100000,"ล้าน":1000000};
+const TH_NUM={"๐":"0","๑":"1","๒":"2","๓":"3","๔":"4","๕":"5","๖":"6","๗":"7","๘":"8","๙":"9"};
+function evalThaiTokens(text){
+  text=text.replace(/\s+/g,""); if(text==="") return null;
+  const words=[...Object.keys(TH_DIGIT),...Object.keys(TH_UNIT)].sort((a,b)=>b.length-a.length);
+  const tokens=[]; let i=0;
+  while(i<text.length){ let hit=null;
+    for(const w of words){ if(text.startsWith(w,i)){ hit=w; break; } }
+    if(!hit) return null; tokens.push(hit); i+=hit.length; }
+  let total=0,current=0,temp=0;
+  for(const w of tokens){
+    if(w in TH_DIGIT){ temp=TH_DIGIT[w]; }
+    else{ const u=TH_UNIT[w];
+      if(u===1000000){ total=(total+current+temp)*1000000; current=0; temp=0; }
+      else{ if(temp===0) temp=1; current+=temp*u; temp=0; } }
+  }
+  return total+current+temp;
+}
+function thaiToNumber(val){
+  if(val==null) return val;
+  let t=String(val).trim(); if(t==="") return val;
+  if(/[๐-๙]/.test(t)) t=t.replace(/[๐-๙]/g,d=>TH_NUM[d]);          // เลขไทย -> อารบิก
+  if(/^-?\d+(\.\d+)?$/.test(t)) return t;                            // เป็นตัวเลขอยู่แล้ว
+  if(t.includes("จุด")){                                            // รองรับทศนิยม "แปดจุดห้า"
+    const [ip,fp]=t.split("จุด"); const iv=ip?evalThaiTokens(ip):0;
+    if(iv==null) return val;
+    let frac=""; let j=0;
+    const dw=Object.keys(TH_DIGIT).sort((a,b)=>b.length-a.length);
+    while(j<fp.length){ let hit=null; for(const w of dw){ if(fp.startsWith(w,j)){ hit=w; break; } }
+      if(!hit) return val; frac+=TH_DIGIT[hit]; j+=hit.length; }
+    return String(iv)+(frac?"."+frac:"");
+  }
+  const n=evalThaiTokens(t);
+  return n==null?val:String(n);
+}
+
 /* ---------- ไอคอน (inline SVG) ---------- */
 function Ico({size=20,children,fill="none"}){
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor"
@@ -106,6 +144,7 @@ const BookOpen=(p)=><Ico {...p}><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1
 const Save=(p)=><Ico {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></Ico>;
 const ImageIcon=(p)=><Ico {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></Ico>;
 const Cloud=(p)=><Ico {...p}><path d="M17.5 19a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.7 1.5A4 4 0 0 0 6 19z"/></Ico>;
+const Hash=(p)=><Ico {...p}><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></Ico>;
 
 /* ---------- Persist (เขียนลง Firestore) ---------- */
 const PersistCtx = createContext(null);
@@ -412,6 +451,17 @@ function ScoresView({subj,students,assignments,setAssignments,scores,setScores})
   };
   const rowTotal=(studentId)=>list.reduce((sum,a)=>sum+(Number(subjScores[studentId]&&subjScores[studentId][a.id])||0),0);
   const totalMax=list.reduce((s,a)=>s+(a.max||0),0);
+  const convertAll=()=>{
+    const updated={}; let changed=0;
+    students.forEach(s=>{ const row={...(subjScores[s.id]||{})}; let dirty=false;
+      Object.keys(row).forEach(aId=>{ const conv=thaiToNumber(row[aId]);
+        if(conv!==row[aId] && /^-?\d/.test(String(conv))){ row[aId]=conv; dirty=true; changed++; } });
+      if(dirty){ updated[s.id]=row; persist.setScoreDoc(subj.id,s.id,row); } });
+    if(changed>0){ setScores(p=>{ const cur={...(p[subj.id]||{})};
+      Object.keys(updated).forEach(sid=>cur[sid]=updated[sid]); return {...p,[subj.id]:cur}; });
+      alert("แปลงเป็นตัวเลขแล้ว "+changed+" ช่อง"); }
+    else alert("ไม่พบค่าที่ต้องแปลง (ทุกช่องเป็นตัวเลขอยู่แล้ว)");
+  };
   const exportXlsx=()=>{
     const header=["เลขที่","ชื่อ-สกุล",...list.map(a=>a.title+" ("+a.max+")"),"รวม ("+totalMax+")"];
     const rows=students.map(s=>[s.number,s.name,...list.map(a=>(subjScores[s.id]&&subjScores[s.id][a.id])!=null?subjScores[s.id][a.id]:""),rowTotal(s.id)]);
@@ -421,7 +471,8 @@ function ScoresView({subj,students,assignments,setAssignments,scores,setScores})
     XLSX.writeFile(wb,"คะแนน_"+subj.name+"_"+subj.room+".xlsx");
   };
   return <div>
-    <SectionHead title="เช็คคะแนน" right={<div style={{display:"flex",gap:8}}>
+    <SectionHead title="เช็คคะแนน" right={<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      <Btn variant="soft" size="sm" onClick={convertAll} title="แปลงคำอ่านภาษาไทย/เลขไทย เป็นตัวเลข"><Hash size={15}/>แปลงเป็นตัวเลข</Btn>
       <Btn variant="ghost" size="sm" onClick={()=>{setAForm({title:"",max:10});setModal({mode:"add"});}}><Plus size={15}/>เพิ่มงาน</Btn>
       <Btn variant="accent" size="sm" onClick={exportXlsx}><Download size={15}/>Export</Btn>
     </div>}/>
