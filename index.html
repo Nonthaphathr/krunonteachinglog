@@ -31,6 +31,43 @@
     .tl-modal{ border-radius:16px !important; }
   }
   .spin{ animation:sp 1s linear infinite; } @keyframes sp{ to{ transform:rotate(360deg); } }
+
+  /* ----- โหมดกรอกเร็ว ----- */
+  .qs-chips{ display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; scrollbar-width:thin; }
+  .qs-chip{ flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-start; gap:1px; padding:7px 12px; border-radius:10px; border:1px solid #dde3ea; background:#fff; cursor:pointer; font-family:inherit; font-size:13.5px; color:#1f3a5f; font-weight:600; max-width:200px; text-align:left; }
+  .qs-chip small{ font-weight:500; font-size:11.5px; color:#677483; }
+  .qs-chip.on{ background:#1f3a5f; color:#fff; border-color:#1f3a5f; }
+  .qs-chip.on small{ color:#c7d4e2; }
+  .qs-sticky{ position:sticky; top:59px; z-index:20; background:#f1f4f8; padding:10px 0 8px; }
+  .qs-search{ display:flex; align-items:center; gap:8px; background:#fff; border:2px solid #1f3a5f; border-radius:12px; padding:4px 6px 4px 12px; }
+  .qs-search input{ flex:1; min-width:0; border:none; outline:none; font-family:inherit; font-size:17px; padding:9px 0; background:transparent; color:#1f2933; }
+  .qs-iconbtn{ display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:9px; border:none; cursor:pointer; background:#eef2f7; color:#1f3a5f; flex-shrink:0; }
+  .qs-iconbtn.rec{ background:#c0392b; color:#fff; animation:pulse 1s ease-in-out infinite; }
+  @keyframes pulse{ 50%{ opacity:.6; } }
+  .qs-row{ display:flex; align-items:center; gap:12px; width:100%; padding:11px 14px; background:#fff; border:none; border-top:1px solid #dde3ea; cursor:pointer; font-family:inherit; text-align:left; font-size:15px; color:#1f2933; }
+  .qs-row:first-child{ border-top:none; }
+  .qs-row:hover{ background:#f7f9fb; }
+  .qs-row.hi{ background:#fbf0e8; box-shadow:inset 4px 0 0 #c2703d; }
+  .qs-no{ width:34px; height:34px; border-radius:50%; background:#eef2f7; color:#1f3a5f; font-weight:700; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+  .qs-score{ min-width:48px; text-align:center; padding:5px 10px; border-radius:20px; font-weight:700; font-size:14.5px; }
+  .qs-panel{ background:#fff; border:2px solid #c2703d; border-radius:14px; padding:14px; margin-bottom:12px; }
+  .qs-big{ width:100%; font-family:inherit; font-size:30px; font-weight:700; text-align:center; padding:8px; border:1px solid #dde3ea; border-radius:10px; outline:none; color:#1f3a5f; }
+  .qs-big:focus{ border-color:#1f3a5f; box-shadow:0 0 0 3px #eef2f7; }
+  .qs-pad{ display:grid; grid-template-columns:repeat(auto-fill,minmax(48px,1fr)); gap:6px; margin-top:10px; }
+  .qs-pad button{ padding:11px 0; border-radius:9px; border:1px solid #dde3ea; background:#f7f9fb; font-family:inherit; font-size:16px; font-weight:700; color:#1f3a5f; cursor:pointer; }
+  .qs-pad button.on{ background:#1f3a5f; color:#fff; border-color:#1f3a5f; }
+  .qs-toast{ position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:80; padding:10px 18px; border-radius:24px; color:#fff; font-weight:600; font-size:14.5px; box-shadow:0 6px 20px rgba(0,0,0,.18); max-width:92vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .seg{ display:inline-flex; background:#e3e9f0; border-radius:10px; padding:3px; }
+  .seg button{ border:none; background:transparent; padding:6px 12px; border-radius:8px; font-family:inherit; font-weight:600; font-size:13px; color:#677483; cursor:pointer; display:flex; align-items:center; gap:5px; }
+  .seg button.on{ background:#fff; color:#1f3a5f; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  kbd{ font-family:inherit; font-size:11px; background:#fff; border:1px solid #dde3ea; border-bottom-width:2px; border-radius:4px; padding:0 5px; color:#677483; }
+  @media (max-width:640px){ .qs-hint-desk{ display:none; } }
+
+  /* ----- Q-Info ----- */
+  .qi-map{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr); gap:8px; align-items:center; padding:9px 0; border-top:1px solid #eef2f7; }
+  @media (max-width:640px){ .qi-map{ grid-template-columns:1fr; gap:5px; } }
+  .qi-code{ font-family:ui-monospace,Consolas,monospace; font-size:11.5px; background:#162b46; color:#d9e4f0; padding:10px; border-radius:8px; white-space:pre-wrap; word-break:break-all; max-height:160px; overflow:auto; margin:0; }
+  .qi-step{ display:inline-flex; width:24px; height:24px; border-radius:50%; background:#c2703d; color:#fff; font-size:13px; align-items:center; justify-content:center; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -144,6 +181,12 @@ const BookOpen=(p)=><Ico {...p}><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1
 const Save=(p)=><Ico {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></Ico>;
 const ImageIcon=(p)=><Ico {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></Ico>;
 const Cloud=(p)=><Ico {...p}><path d="M17.5 19a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.7 1.5A4 4 0 0 0 6 19z"/></Ico>;
+const Mic=(p)=><Ico {...p}><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></Ico>;
+const Zap=(p)=><Ico {...p}><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></Ico>;
+const Table=(p)=><Ico {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></Ico>;
+const Undo=(p)=><Ico {...p}><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></Ico>;
+const Shuffle=(p)=><Ico {...p}><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></Ico>;
+const Copy=(p)=><Ico {...p}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Ico>;
 const Hash=(p)=><Ico {...p}><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></Ico>;
 
 /* ---------- Persist (เขียนลง Firestore) ---------- */
@@ -155,7 +198,7 @@ function makePersist(){
     const noop = async()=>{};
     return { addSubject:noop,updateSubject:noop,deleteSubject:noop,replaceStudents:noop,
       deleteStudent:noop,setAttendanceDay:noop,addAssignment:noop,updateAssignment:noop,
-      deleteAssignment:noop,setScoreDoc:noop,addNote:noop,updateNote:noop,deleteNote:noop,setLogo:noop };
+      deleteAssignment:noop,setScoreDoc:noop,addNote:noop,updateNote:noop,deleteNote:noop,setLogo:noop,setQinfo:noop };
   }
   const col = (n)=>db.collection(n);
   const deleteWhere = async(name,subjId)=>{
@@ -166,7 +209,7 @@ function makePersist(){
     addSubject:(s)=>col("subjects").doc(s.id).set({name:s.name,code:s.code,room:s.room,color:s.color,createdAt:s.createdAt||Date.now()}),
     updateSubject:(id,s)=>col("subjects").doc(id).set({name:s.name,code:s.code,room:s.room,color:s.color},{merge:true}),
     deleteSubject:async(id)=>{ await col("subjects").doc(id).delete();
-      await Promise.all(["students","assignments","notes","attendance","scores"].map(n=>deleteWhere(n,id))); },
+      await Promise.all(["students","assignments","notes","attendance","scores","qinfo"].map(n=>deleteWhere(n,id))); },
     replaceStudents:async(subjId,list)=>{ await deleteWhere("students",subjId);
       const batch=db.batch(); list.forEach(s=>batch.set(col("students").doc(s.id),{subjectId:subjId,number:s.number,name:s.name})); await batch.commit(); },
     deleteStudent:(id)=>col("students").doc(id).delete(),
@@ -179,6 +222,7 @@ function makePersist(){
     updateNote:(id,n)=>col("notes").doc(id).set({date:n.date,text:n.text},{merge:true}),
     deleteNote:(id)=>col("notes").doc(id).delete(),
     setLogo:(url)=>col("settings").doc("app").set({logoUrl:url}),
+    setQinfo:(docId,data)=>col("qinfo").doc(docId).set(data),
   };
 }
 
@@ -230,6 +274,7 @@ function App(){
   const [scores,setScores]=useState({});
   const [notes,setNotes]=useState({});
   const [logoUrl,setLogoUrl]=useState("");
+  const [qinfo,setQinfo]=useState({});
   const [loading,setLoading]=useState(true);
   const [view,setView]=useState("home");
   const [activeSubj,setActiveSubj]=useState(null);
@@ -241,7 +286,9 @@ function App(){
     async function load(){
       if(!FB){ // seed ตัวอย่างในโหมดหน่วยความจำ
         setSubjects([{id:"s1",name:"วิทยาการคำนวณ",code:"ว21104",room:"ม.1/1",color:CARD_COLORS[0],createdAt:1}]);
-        setStudents({s1:[{id:"a1",number:1,name:"เด็กชายกิตติ ใจดี"},{id:"a2",number:2,name:"เด็กหญิงนภา ศรีสุข"}]});
+        const demoNames=["เด็กชายกิตติ ใจดี","เด็กหญิงนภา ศรีสุข","เด็กชายธนพล หินเงิน","เด็กหญิงพิมพ์ชนก แก้วใส","เด็กชายภูมิ รักไทย","เด็กหญิงสุดา มีสุข","เด็กชายอนันต์ ทองดี","เด็กหญิงกานดา ใจงาม"];
+        setStudents({s1:demoNames.map((n,i)=>({id:"a"+(i+1),number:i+1,name:n}))});
+        setAssignments({s1:[{id:"w1",title:"ใบงานจับใจความสำคัญ",max:10,order:1},{id:"w2",title:"แบบฝึกคำที่มีหลายความหมาย",max:10,order:2},{id:"w3",title:"งานเขียนจดหมาย",max:20,order:3},{id:"w4",title:"สอบกลางภาค",max:40,order:4}]});
         setLoading(false); return;
       }
       try{
@@ -261,6 +308,9 @@ function App(){
         const scoObj={}; sco.docs.forEach(d=>{const x=d.data(); scoObj[x.subjectId]=scoObj[x.subjectId]||{}; scoObj[x.subjectId][x.studentId]=x.values||{};}); setScores(scoObj);
         const noteObj={}; note.docs.forEach(d=>{const x={id:d.id,...d.data()}; (noteObj[x.subjectId]=noteObj[x.subjectId]||[]).push(x);}); setNotes(noteObj);
         if(setDoc.exists) setLogoUrl(setDoc.data().logoUrl||"");
+        // Q-Info mapping (แยกโหลด — ถ้าพังจะไม่กระทบข้อมูลส่วนอื่น)
+        try{ const qi=await db.collection("qinfo").get(); const qiObj={}; qi.docs.forEach(d=>qiObj[d.id]=d.data()); if(alive) setQinfo(qiObj); }
+        catch(e){ console.warn("โหลด qinfo ไม่ได้",e); }
       }catch(e){ console.error("โหลดข้อมูลล้มเหลว:",e); }
       if(alive) setLoading(false);
     }
@@ -296,6 +346,7 @@ function App(){
       {view==="attendance" && subj && <AttendanceView subj={subj} students={students[subj.id]||[]} attendance={attendance} setAttendance={setAttendance}/>}
       {view==="scores" && subj && <ScoresView subj={subj} students={students[subj.id]||[]} assignments={assignments} setAssignments={setAssignments} scores={scores} setScores={setScores}/>}
       {view==="notes" && subj && <NotesView subj={subj} notes={notes} setNotes={setNotes}/>}
+      {view==="qinfo" && subj && <QinfoView subj={subj} students={students[subj.id]||[]} assignments={assignments} scores={scores} qinfo={qinfo} setQinfo={setQinfo}/>}
       {view==="settings" && <SettingsView subjects={subjects} students={students} setStudents={setStudents} logoUrl={logoUrl} setLogoUrl={setLogoUrl}/>}
     </main>
   </div>
@@ -358,6 +409,7 @@ function ClassView({subj,setView,students}){
     {key:"attendance",icon:CheckSquare,title:"เช็คชื่อ",desc:"บันทึกการมาเรียนรายวัน",color:"#2c6e9c"},
     {key:"scores",icon:ClipboardList,title:"เช็คคะแนน",desc:"บันทึกคะแนนงาน/ชิ้นงาน",color:C.accent},
     {key:"notes",icon:NotebookPen,title:"บันทึกช่วยจำ",desc:"โน้ตประจำชั้นเรียน",color:"#3c7a5a"},
+    {key:"qinfo",icon:Shuffle,title:"เทียบคะแนน Q-Info",desc:"เทียบงาน → ตัวชี้วัด แปลงคะแนนหน่วยอัตโนมัติ + Export",color:"#7a3ea0"},
   ];
   return <div>
     <div style={{background:"#fff",border:"1px solid "+C.border,borderRadius:12,padding:"16px 18px",marginBottom:14}}>
@@ -437,6 +489,10 @@ function ScoresView({subj,students,assignments,setAssignments,scores,setScores})
   const subjScores=scores[subj.id]||{};
   const [modal,setModal]=useState(null);
   const [aForm,setAForm]=useState({title:"",max:10});
+  const [mode,setModeRaw]=useState(()=>{ try{ return localStorage.getItem("tl_score_mode")||"quick"; }catch(e){ return "quick"; } });
+  const setMode=(m)=>{ setModeRaw(m); try{ localStorage.setItem("tl_score_mode",m); }catch(e){} };
+  const [tq,setTq]=useState("");
+  const tableStudents=useMemo(()=>tq.trim()?findStudents(students,tq):students,[students,tq]);
   const addAssignment=()=>{ if(!aForm.title.trim()) return;
     const item={id:uid(),title:aForm.title.trim(),max:Number(aForm.max)||0,order:Date.now()};
     setAssignments(p=>({...p,[subj.id]:[...(p[subj.id]||[]),item]})); persist.addAssignment(subj.id,item);
@@ -470,13 +526,25 @@ function ScoresView({subj,students,assignments,setAssignments,scores,setScores})
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"คะแนน");
     XLSX.writeFile(wb,"คะแนน_"+subj.name+"_"+subj.room+".xlsx");
   };
+  const openAddAssignment=()=>{setAForm({title:"",max:10});setModal({mode:"add"});};
   return <div>
     <SectionHead title="เช็คคะแนน" right={<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
       <Btn variant="soft" size="sm" onClick={convertAll} title="แปลงคำอ่านภาษาไทย/เลขไทย เป็นตัวเลข"><Hash size={15}/>แปลงเป็นตัวเลข</Btn>
-      <Btn variant="ghost" size="sm" onClick={()=>{setAForm({title:"",max:10});setModal({mode:"add"});}}><Plus size={15}/>เพิ่มงาน</Btn>
+      <Btn variant="ghost" size="sm" onClick={openAddAssignment}><Plus size={15}/>เพิ่มงาน</Btn>
       <Btn variant="accent" size="sm" onClick={exportXlsx}><Download size={15}/>Export</Btn>
     </div>}/>
-    <div style={tableWrap}><table style={tableStyle}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
+      <div className="seg">
+        <button className={mode==="quick"?"on":""} onClick={()=>setMode("quick")}><Zap size={15}/>กรอกเร็ว (ค้นชื่อ)</button>
+        <button className={mode==="table"?"on":""} onClick={()=>setMode("table")}><Table size={15}/>ตารางทั้งหมด</button>
+      </div>
+      {mode==="table" && <div style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:"1px solid "+C.border,borderRadius:8,padding:"6px 10px",flex:"1 1 200px",maxWidth:320}}>
+        <Search size={15}/><input value={tq} onChange={e=>setTq(e.target.value)} placeholder="กรองชื่อ / เลขที่..." style={{border:"none",outline:"none",flex:1,minWidth:0,fontFamily:"inherit",fontSize:14}}/>
+        {tq && <button onClick={()=>setTq("")} style={{background:"none",border:"none",cursor:"pointer",color:SUB,display:"flex"}}><X size={15}/></button>}
+      </div>}
+    </div>
+    {mode==="quick" && <QuickScore students={students} list={list} subjScores={subjScores} setScore={setScore} onAddAssignment={openAddAssignment}/>}
+    {mode==="table" && <div style={tableWrap}><table style={tableStyle}>
       <thead><tr>
         <th style={{...th,width:40}}>#</th>
         <th style={{...th,textAlign:"left",minWidth:150,position:"sticky",left:0,background:C.navy,zIndex:2}}>ชื่อ-สกุล</th>
@@ -492,7 +560,7 @@ function ScoresView({subj,students,assignments,setAssignments,scores,setScores})
         <th style={{...th,minWidth:70,background:C.navyDark}}>รวม<br/><span style={{fontWeight:400,fontSize:11,color:"#c7d4e2"}}>{totalMax}</span></th>
       </tr></thead>
       <tbody>
-        {students.map(s=><tr key={s.id} className="tl-row">
+        {tableStudents.map(s=><tr key={s.id} className="tl-row">
           <td style={{...td,textAlign:"center",color:SUB}}>{s.number}</td>
           <td style={{...td,position:"sticky",left:0,background:"inherit",fontWeight:500}}>{s.name}</td>
           {list.map(a=><td key={a.id} style={{...td,padding:4,textAlign:"center"}}>
@@ -504,12 +572,199 @@ function ScoresView({subj,students,assignments,setAssignments,scores,setScores})
         {students.length===0 && <tr><td colSpan={3+list.length} style={{...td,textAlign:"center",color:SUB,padding:28}}>ยังไม่มีรายชื่อนักเรียน</td></tr>}
         {students.length>0 && list.length===0 && <tr><td colSpan={3} style={{...td,textAlign:"center",color:SUB,padding:22}}>กด “เพิ่มงาน” เพื่อสร้างหัวข้อเก็บคะแนน</td></tr>}
       </tbody>
-    </table></div>
+    </table></div>}
     <Modal open={!!modal} onClose={()=>setModal(null)} title={modal&&modal.mode==="add"?"เพิ่มหัวข้องาน":"แก้ไขหัวข้องาน"}>
       <Field label="ชื่องาน / ชิ้นงาน"><input style={inputStyle} value={aForm.title} onChange={e=>setAForm({...aForm,title:e.target.value})} placeholder="เช่น ใบงานที่ 1"/></Field>
       <Field label="คะแนนเต็ม"><input type="number" style={inputStyle} value={aForm.max} onChange={e=>setAForm({...aForm,max:e.target.value})}/></Field>
       <Btn variant="primary" onClick={modal&&modal.mode==="add"?addAssignment:editAssignment} style={{width:"100%"}}><Save size={16}/>บันทึก</Btn>
     </Modal>
+  </div>;
+}
+
+/* ---------- ค้นหานักเรียน (ใช้ร่วมกัน: โหมดกรอกเร็ว / กรองตาราง / เทียบ Q-Info) ---------- */
+const NAME_PREFIX=/^(เด็กชาย|เด็กหญิง|นางสาว|นาย|นาง|ด\.ช\.|ด\.ญ\.|น\.ส\.)\s*/;
+const normName=(s)=>String(s||"").trim().replace(NAME_PREFIX,"").replace(/\s+/g,"").toLowerCase();
+const isNum=(v)=>/^-?\d+(\.\d+)?$/.test(String(v).trim());
+const numOf=(v)=>{ if(v==null||v==="") return null; const t=String(thaiToNumber(String(v).trim())); return isNum(t)?Number(t):null; };
+/* แยก "คำค้น + คะแนน" เช่น "12 8" → เลขที่ 12 ได้ 8 , "สมชาย 7.5" , "เลขที่ห้า แปด" */
+function parseQuick(text){
+  const t=String(text||"").replace(/เลขที่|คะแนน|ได้/g," ").trim(); if(!t) return {query:"",score:null};
+  const parts=t.split(/\s+/);
+  if(parts.length>=2){ const last=String(thaiToNumber(parts[parts.length-1])); if(isNum(last)) return {query:parts.slice(0,-1).join(" "),score:last}; }
+  return {query:t,score:null};
+}
+function findStudents(students,query){
+  const q=String(query||"").trim(); if(!q) return students;
+  const qn=String(thaiToNumber(q));
+  if(/^\d+$/.test(qn)) return students.filter(s=>String(s.number)===qn);       // พิมพ์ตัวเลข = ค้นเลขที่ (ตรงตัว)
+  const nq=normName(q); const first=[],other=[];
+  students.forEach(s=>{
+    const n=normName(s.name); const i=n.indexOf(nq); if(i<0) return;
+    const words=String(s.name).replace(NAME_PREFIX,"").trim().toLowerCase().split(/\s+/);
+    if(i===0 || words.some(w=>w.startsWith(nq))) first.push(s); else other.push(s);   // ขึ้นต้นชื่อ/นามสกุล มาก่อน
+  });
+  return [...first,...other];
+}
+
+/* ---------- โหมดกรอกเร็ว: ค้นชื่อ/เลขที่ → กรอกคะแนน → Enter ---------- */
+function QuickScore({students,list,subjScores,setScore,onAddAssignment}){
+  const [aid,setAid]=useState(()=>{ try{ return localStorage.getItem("tl_qs_aid")||""; }catch(e){ return ""; } });
+  useEffect(()=>{ if(list.length && !list.find(a=>a.id===aid)) setAid(list[list.length-1].id); },[list,aid]);
+  useEffect(()=>{ try{ localStorage.setItem("tl_qs_aid",aid); }catch(e){} },[aid]);
+  const asg=list.find(a=>a.id===aid);
+  const [q,setQ]=useState(""); const [hi,setHi]=useState(0);
+  const [sel,setSel]=useState(null); const [val,setVal]=useState("");
+  const [onlyEmpty,setOnlyEmpty]=useState(false);
+  const [autoNext,setAutoNextRaw]=useState(()=>{ try{ return localStorage.getItem("tl_qs_next")==="1"; }catch(e){ return false; } });
+  const setAutoNext=(v)=>{ setAutoNextRaw(v); try{ localStorage.setItem("tl_qs_next",v?"1":"0"); }catch(e){} };
+  const [msg,setMsg]=useState(null); const [recent,setRecent]=useState([]);
+  const [listening,setListening]=useState(false);
+  const searchRef=useRef(null), valRef=useRef(null), listRef=useRef(null);
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+
+  const curOf=(sid,a=aid)=>{ const r=subjScores[sid]; const v=r&&r[a]; return (v==null||v==="")?null:v; };
+  const countDone=(a)=>students.filter(s=>curOf(s.id,a)!=null).length;
+  const done=asg?countDone(aid):0;
+  const parsed=useMemo(()=>parseQuick(q),[q]);
+  const matches=useMemo(()=>{
+    if(!parsed.query) return onlyEmpty?students.filter(s=>curOf(s.id)==null):students;
+    return findStudents(students,parsed.query);
+  },[students,parsed.query,onlyEmpty,subjScores,aid]);
+  useEffect(()=>setHi(0),[parsed.query,onlyEmpty]);
+  useEffect(()=>{ const el=listRef.current&&listRef.current.querySelector(".qs-row.hi"); if(el&&el.scrollIntoView) el.scrollIntoView({block:"nearest"}); },[hi]);
+  useEffect(()=>{ if(!msg) return; const t=setTimeout(()=>setMsg(null),2600); return ()=>clearTimeout(t); },[msg]);
+  useEffect(()=>{ if(sel) setTimeout(()=>{ if(valRef.current){ valRef.current.focus(); valRef.current.select(); } },40); },[sel]);
+  const chipsRef=useRef(null);
+  useEffect(()=>{ const el=chipsRef.current&&chipsRef.current.querySelector(".qs-chip.on"); if(el&&chipsRef.current) chipsRef.current.scrollLeft=el.offsetLeft-chipsRef.current.offsetLeft-8; },[aid,list.length]);
+
+  const focusSearch=()=>setTimeout(()=>searchRef.current&&searchRef.current.focus(),40);
+  const pick=(s)=>{ setSel(s.id); const c=curOf(s.id); setVal(c==null?"":String(c)); };
+  const stName=(sid)=>{ const s=students.find(x=>x.id===sid); return s?(s.number+". "+s.name):""; };
+
+  const commit=(sid,raw)=>{
+    if(!asg){ setMsg({ok:false,text:"เลือกงานที่จะกรอกก่อน"}); return false; }
+    const t=String(raw==null?"":raw).trim(); const prev=curOf(sid);
+    if(t===""){ setScore(sid,aid,""); setMsg({ok:true,text:"ลบคะแนน "+stName(sid)});
+      setRecent(r=>[{k:uid(),sid,aid,prev,v:""},...r].slice(0,6)); return true; }
+    const conv=String(thaiToNumber(t));
+    if(!isNum(conv)||Number(conv)<0){ setMsg({ok:false,text:"กรอกเป็นตัวเลขเท่านั้น"}); return false; }
+    if(asg.max && Number(conv)>Number(asg.max)){ setMsg({ok:false,text:"เกินคะแนนเต็ม ("+asg.max+")"}); return false; }
+    setScore(sid,aid,conv);
+    setMsg({ok:true,text:stName(sid)+"  →  "+conv+(asg.max?" / "+asg.max:"")});
+    setRecent(r=>[{k:uid(),sid,aid,prev,v:conv},...r].slice(0,6));
+    return true;
+  };
+  const nextEmpty=(afterSid)=>{ const idx=students.findIndex(s=>s.id===afterSid);
+    for(let k=1;k<students.length;k++){ const s=students[(idx+k)%students.length]; if(s.id!==afterSid && curOf(s.id)==null) return s; } return null; };
+  const afterCommit=(sid)=>{
+    setQ("");
+    if(autoNext){ const n=nextEmpty(sid); if(n){ pick(n); return; } setMsg({ok:true,text:"กรอกครบทุกคนแล้ว"}); }
+    setSel(null); focusSearch();
+  };
+  // Enter ในช่องค้นหา: "เลขที่/ชื่อ + คะแนน" และเจอคนเดียว → บันทึกทันที, ไม่งั้นเลือกคนที่ไฮไลต์
+  const handleText=(text,hiIdx=0)=>{
+    const p=parseQuick(text); const m=p.query?findStudents(students,p.query):matches;
+    if(p.score!=null && m.length===1){ if(commit(m[0].id,p.score)){ setQ(""); focusSearch(); } return; }
+    if(p.score!=null && m.length>1){ setMsg({ok:false,text:"พบ "+m.length+" คน — พิมพ์ชื่อให้ชัดขึ้น หรือใช้เลขที่"}); return; }
+    if(m.length>0) pick(m[Math.min(hiIdx,m.length-1)]);
+    else setMsg({ok:false,text:"ไม่พบนักเรียน"});
+  };
+  const onSearchKey=(e)=>{
+    if(e.key==="ArrowDown"){ e.preventDefault(); setHi(h=>Math.min(h+1,matches.length-1)); }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); setHi(h=>Math.max(h-1,0)); }
+    else if(e.key==="Enter"){ e.preventDefault(); handleText(q,hi); }
+    else if(e.key==="Escape"){ setQ(""); }
+  };
+  const onValKey=(e)=>{
+    if(e.key==="Enter"){ e.preventDefault(); if(commit(sel,val)) afterCommit(sel); }
+    else if(e.key==="Escape"){ e.preventDefault(); setSel(null); focusSearch(); }
+  };
+  const listen=()=>{
+    if(!SR) return; if(listening) return;
+    const r=new SR(); r.lang="th-TH"; r.interimResults=false; r.maxAlternatives=1;
+    r.onresult=(ev)=>{ const t=ev.results[0][0].transcript; setQ(t); handleText(t,0); };
+    r.onend=()=>setListening(false); r.onerror=()=>setListening(false);
+    setListening(true); try{ r.start(); }catch(e){ setListening(false); }
+  };
+  const undo=(it)=>{ setScore(it.sid,it.aid,it.prev==null?"":it.prev); setRecent(r=>r.filter(x=>x.k!==it.k)); setMsg({ok:true,text:"ย้อนกลับ "+stName(it.sid)}); };
+
+  if(!list.length) return <div style={{...panel,textAlign:"center",color:SUB,padding:28}}>
+    <div style={{marginBottom:12}}>ยังไม่มีหัวข้องาน — สร้างงานก่อนเริ่มกรอกคะแนน</div>
+    <Btn variant="accent" onClick={onAddAssignment}><Plus size={16}/>เพิ่มงาน</Btn></div>;
+
+  const pad = asg && Number(asg.max)>0 && Number(asg.max)<=20 && Number.isInteger(Number(asg.max)) ? Array.from({length:Number(asg.max)+1},(_,i)=>i) : null;
+  const selStu = sel && students.find(s=>s.id===sel);
+  const pct = students.length?Math.round(done/students.length*100):0;
+
+  return <div>
+    {/* 1) เลือกงาน */}
+    <div className="qs-chips" ref={chipsRef}>
+      {list.map(a=>{ const d=countDone(a.id); return <button key={a.id} className={"qs-chip"+(a.id===aid?" on":"")} onClick={()=>{ setAid(a.id); setSel(null); focusSearch(); }} title={a.title}>
+        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:176}}>{a.title}</span>
+        <small>เต็ม {a.max} · กรอกแล้ว {d}/{students.length}</small></button>; })}
+    </div>
+
+    {/* 2) ช่องค้นหา (ติดขอบบนตอนเลื่อน) */}
+    <div className="qs-sticky">
+      <div className="qs-search">
+        <Search size={20}/>
+        <input ref={searchRef} value={q} onChange={e=>setQ(e.target.value)} onKeyDown={onSearchKey} autoFocus
+          placeholder="พิมพ์เลขที่ หรือชื่อ (เช่น 12 หรือ สมชาย)" enterKeyHint="go" autoComplete="off"/>
+        {q && <button className="qs-iconbtn" style={{background:"transparent"}} onClick={()=>{setQ("");focusSearch();}} title="ล้าง"><X size={18}/></button>}
+        {SR && <button className={"qs-iconbtn"+(listening?" rec":"")} onClick={listen} title="พูดชื่อ/เลขที่ + คะแนน เช่น “เลขที่ห้า แปด”"><Mic size={19}/></button>}
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginTop:8,flexWrap:"wrap"}}>
+        <div style={{flex:"1 1 160px",display:"flex",alignItems:"center",gap:8}}>
+          <div style={{flex:1,height:7,background:"#dde3ea",borderRadius:9,overflow:"hidden"}}><div style={{width:pct+"%",height:"100%",background:pct===100?"#2e7d52":C.accent,transition:"width .3s"}}/></div>
+          <span style={{fontSize:12.5,color:SUB,fontWeight:600,whiteSpace:"nowrap"}}>{done}/{students.length}</span>
+        </div>
+        <label style={{display:"flex",alignItems:"center",gap:5,fontSize:13,color:C.navy,fontWeight:600,cursor:"pointer"}}><input type="checkbox" checked={onlyEmpty} onChange={e=>setOnlyEmpty(e.target.checked)}/>เฉพาะที่ยังไม่กรอก</label>
+        <label style={{display:"flex",alignItems:"center",gap:5,fontSize:13,color:C.navy,fontWeight:600,cursor:"pointer"}} title="บันทึกแล้วข้ามไปคนถัดไปที่ยังไม่มีคะแนน"><input type="checkbox" checked={autoNext} onChange={e=>setAutoNext(e.target.checked)}/>ไปคนถัดไปอัตโนมัติ</label>
+      </div>
+      <div className="qs-hint-desk" style={{fontSize:12,color:SUB,marginTop:6}}>
+        ทางลัด: พิมพ์ <b>“12 8”</b> แล้ว <kbd>Enter</kbd> = เลขที่ 12 ได้ 8 ทันที · <kbd>↑</kbd><kbd>↓</kbd> เลือกคน · <kbd>Enter</kbd> เปิดช่องคะแนน · <kbd>Esc</kbd> ยกเลิก
+      </div>
+    </div>
+
+    {/* 3) แผงกรอกคะแนนของคนที่เลือก */}
+    {selStu && <div className="qs-panel">
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+        <div className="qs-no" style={{background:C.accent,color:"#fff"}}>{selStu.number}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:700,fontSize:16.5,color:C.navy,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selStu.name}</div>
+          <div style={{fontSize:12.5,color:SUB}}>{asg&&asg.title} · เต็ม {asg&&asg.max}{curOf(selStu.id)!=null?" · เดิม "+curOf(selStu.id):""}</div>
+        </div>
+        <button className="qs-iconbtn" onClick={()=>{setSel(null);focusSearch();}} title="ปิด (Esc)"><X size={18}/></button>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <input ref={valRef} className="qs-big" type="text" inputMode="decimal" enterKeyHint="done" value={val} onChange={e=>setVal(e.target.value)} onKeyDown={onValKey} placeholder="คะแนน"/>
+        <Btn variant="accent" onClick={()=>{ if(commit(sel,val)) afterCommit(sel); }} style={{padding:"0 18px",fontSize:16}}><Save size={18}/>บันทึก</Btn>
+      </div>
+      {pad && <div className="qs-pad">{pad.map(n=><button key={n} className={String(val)===String(n)?"on":""} onClick={()=>{ if(commit(sel,n)) afterCommit(sel); }}>{n}</button>)}</div>}
+      {curOf(selStu.id)!=null && <button onClick={()=>{ if(commit(sel,"")) afterCommit(sel); }} style={{marginTop:10,background:"none",border:"none",color:"#c0392b",fontFamily:"inherit",fontSize:13,fontWeight:600,cursor:"pointer",padding:0}}>ลบคะแนนของคนนี้</button>}
+    </div>}
+
+    {/* 4) รายชื่อที่ค้นพบ */}
+    <div ref={listRef} style={{...tableWrap,overflow:"hidden"}}>
+      {matches.map((s,i)=>{ const v=curOf(s.id); return <button key={s.id} className={"qs-row"+(i===hi&&!sel?" hi":"")} onClick={()=>pick(s)} style={s.id===sel?{background:C.accentSoft}:null}>
+        <div className="qs-no">{s.number}</div>
+        <div style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+        <div className="qs-score" style={v!=null?{background:"#e6f4ec",color:"#2e7d52"}:{background:"#f1f4f8",color:"#a0aab5"}}>{v!=null?v:"–"}</div>
+      </button>; })}
+      {matches.length===0 && <div style={{padding:24,textAlign:"center",color:SUB,fontSize:14}}>{onlyEmpty&&!parsed.query?"กรอกครบทุกคนแล้ว":"ไม่พบนักเรียนที่ค้นหา"}</div>}
+    </div>
+
+    {/* 5) ล่าสุด + ย้อนกลับ */}
+    {recent.length>0 && <div style={{...panel,marginTop:12,padding:12}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.navy,marginBottom:6}}>บันทึกล่าสุด</div>
+      {recent.map(it=>{ const a=list.find(x=>x.id===it.aid); return <div key={it.k} style={{display:"flex",alignItems:"center",gap:8,fontSize:13.5,padding:"5px 0",borderTop:"1px solid #eef2f7"}}>
+        <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stName(it.sid)} <span style={{color:SUB}}>· {a?a.title:""}</span></span>
+        <b style={{color:C.accent}}>{it.v===""?"ลบ":it.v}</b>
+        <button onClick={()=>undo(it)} title="ย้อนกลับ" style={{display:"flex",alignItems:"center",gap:3,background:C.navySoft,border:"none",borderRadius:6,padding:"3px 8px",cursor:"pointer",color:C.navy,fontFamily:"inherit",fontSize:12,fontWeight:600}}><Undo size={13}/>ย้อน</button>
+      </div>; })}
+    </div>}
+
+    {msg && <div className="qs-toast" style={{background:msg.ok?"#2e7d52":"#c0392b"}}>{msg.text}</div>}
   </div>;
 }
 
@@ -561,6 +816,344 @@ function NotesView({subj,notes,setNotes}){
       <Field label="รายละเอียด"><textarea style={{...inputStyle,minHeight:120,resize:"vertical"}} value={form.text} onChange={e=>setForm({...form,text:e.target.value})} placeholder="พิมพ์บันทึกช่วยจำ..."/></Field>
       <Btn variant="primary" onClick={save} style={{width:"100%"}}><Save size={16}/>บันทึก</Btn>
     </Modal>
+  </div>;
+}
+
+/* ==================== Q-INFO: เทียบงาน → ตัวชี้วัด แล้วแปลงคะแนนอัตโนมัติ ====================
+   โครงสร้าง (cfg) ต่อวิชา/ภาคเรียน เก็บที่ Firestore: qinfo/{subjectId}_t{term}
+   { title, ind:[{u,un,s,n,m,w}], mid, fin, dec, map:{assignmentId: "i:<u|s|n>" | "u:<หน่วย>" | "mid" | "fin" | ""} }
+   ind  = ตัวชี้วัดที่มีคะแนนในเมนู 2.2.2 (u=หน่วย, un=ชื่อหน่วย, s=มาตรฐาน, n=ตัวชี้วัด, m=คะแนนเต็ม, w=ภาระงาน)
+   สูตร : คะแนนตัวชี้วัด = (ผลรวมคะแนนงานที่เทียบ ÷ ผลรวมคะแนนเต็มของงานนั้น) × คะแนนเต็มตัวชี้วัดใน Q-Info
+---------------------------------------------------------------------------------------------- */
+const QINFO_PRESETS={
+  "2569/1":[
+    {t:"ภาษาไทย 1 ม.1/1",ind:[
+      {u:"1",un:"อ่านเติมเต็มชีวิต",s:"ท 1.1",n:"2",m:5,w:"ใบงานจับใจความสำคัญ,ผังความคิดสรุปเรื่อง,ทดสอบย่อย"},
+      {u:"1",un:"อ่านเติมเต็มชีวิต",s:"ท 1.1",n:"4",m:6,w:"ใบงานคำเปรียบเทียบ,แบบฝึกคำที่มีหลายความหมาย,ทดสอบย่อย"},
+      {u:"2",un:"ร้อยลิขิตสื่อสาร",s:"ท 2.1",n:"2",m:11,w:"ชิ้นงานเขียนสื่อสาร,ใบงานเลือกใช้ถ้อยคำ,แบบประเมินงานเขียน"},
+      {u:"3",un:"สดับเหตุการณ์พาที",s:"ท 3.1",n:"1",m:6,w:"พูดสรุปใจความสำคัญ,บันทึกการฟังและดู,แบบประเมินการพูด"},
+      {u:"4",un:"วิถีภาษาไทย",s:"ท 4.1",n:"4",m:10,w:"ใบงานเปรียบเทียบภาษาพูดภาษาเขียน,แบบฝึกวิเคราะห์ระดับภาษา,ทดสอบย่อย"},
+      {u:"5",un:"ภูมิใจในวรรณคดีและวรรณกรรม",s:"ท 5.1",n:"5",m:12,w:"ท่องบทอาขยาน,สมุดบันทึกบทอาขยาน,แบบประเมินการท่องจำ"}]},
+    {t:"ภาษาไทย 3 ม.2/1",ind:[
+      {u:"2",un:"อ่านออกเสียง",s:"ท 5.1",n:"5",m:20,w:"ท่องบทอาขยาน,สมุดบันทึกบทอาขยาน,แบบประเมินการท่องจำ"},
+      {u:"4",un:"อ่านจับใจความ",s:"ท 1.1",n:"5",m:10,w:"ใบงานแยกข้อเท็จจริงข้อคิดเห็น,ผังวิเคราะห์บทความ,ทดสอบย่อย"},
+      {u:"8",un:"ราชาศัพท์",s:"ท 4.1",n:"4",m:20,w:"ใบงานคำราชาศัพท์,แบบฝึกใช้คำราชาศัพท์,ทดสอบย่อย"}]},
+    {t:"ภาษาไทย 5 ม.3/1",ind:[
+      {u:"1",un:"อ่านวิเคราะห์",s:"ท 1.1",n:"2",m:11,w:"ใบงานความหมายโดยตรงและโดยนัย,แบบฝึกวิเคราะห์คำ,ทดสอบย่อย"},
+      {u:"2",un:"เจาะลึกเขียน",s:"ท 2.1",n:"2",m:13,w:"ชิ้นงานเขียนข้อความตามระดับภาษา,ใบงานระดับภาษา,แบบประเมินงานเขียน"},
+      {u:"3",un:"เพียรวินิจสาร",s:"ท 3.1",n:"2",m:10,w:"บันทึกการฟังและดู,พูดวิเคราะห์วิจารณ์,แบบประเมินการพูด"},
+      {u:"4",un:"ภาษาต่างประเทศในภาษาไทย",s:"ท 4.1",n:"1",m:6,w:"ใบงานจำแนกคำภาษาต่างประเทศ,แบบฝึกใช้คำยืม,ทดสอบย่อย"},
+      {u:"5",un:"วิถีไทยในวรรณกรรม",s:"ท 5.1",n:"4",m:10,w:"ท่องบทอาขยาน,ใบงานคุณค่าบทร้อยกรอง,แบบประเมินการท่องจำ"}]},
+    {t:"ภาษาไทย 1 ม.4/1",ind:[
+      {u:"1",un:"เสนาะอ่านขานขับ",s:"ท 1.1",n:"2",m:30,w:"ใบงานตีความแปลความขยายความ,แบบฝึกวิเคราะห์สาร,ทดสอบย่อย"},
+      {u:"3",un:"พากเพียรพูด-ฟัง",s:"ท 3.1",n:"3",m:10,w:"บันทึกการฟังและดู,ใบงานประเมินสาร,พูดเสนอแนวทางประยุกต์ใช้"},
+      {u:"3",un:"พากเพียรพูด-ฟัง",s:"ท 3.1",n:"4",m:10,w:"ใบงานคัดเลือกสื่อ,บันทึกการฟังและดู,แบบประเมินการเลือกสาร"}]},
+    {t:"ภาษาไทย 3 ม.5/1",ind:[
+      {u:"1",un:"กรองกานท์วิจิตร",s:"ท 2.1",n:"1",m:15,w:"ชิ้นงานเขียนสื่อสาร,ใบงานวิเคราะห์วัตถุประสงค์,แบบประเมินงานเขียน"},
+      {u:"2",un:"พินิจภาษา",s:"ท 3.1",n:"3",m:10,w:"บันทึกการฟังและดู,ใบงานประเมินสาร,พูดเสนอแนวทางประยุกต์ใช้"},
+      {u:"2",un:"พินิจภาษา",s:"ท 4.1",n:"3",m:5,w:"ใบงานคำราชาศัพท์,แบบฝึกใช้ภาษาตามโอกาส,ทดสอบย่อย"},
+      {u:"3",un:"พัฒนาการอ่าน",s:"ท 1.1",n:"2",m:4,w:"ใบงานตีความแปลความขยายความ,แบบฝึกวิเคราะห์สาร,ทดสอบย่อย"},
+      {u:"3",un:"พัฒนาการอ่าน",s:"ท 1.1",n:"7",m:4,w:"ผังความคิดจากการอ่าน,ผลงานย่อความ,รายงานการอ่าน"},
+      {u:"3",un:"พัฒนาการอ่าน",s:"ท 1.1",n:"5",m:3,w:"ชิ้นงานเขียนวิจารณ์,อภิปรายโต้แย้ง,แบบประเมินการนำเสนอ"},
+      {u:"4",un:"สืบสานวรรณคดี",s:"ท 5.1",n:"6",m:9,w:"ท่องบทอาขยาน,ใบงานคุณค่าบทร้อยกรอง,แบบประเมินการท่องจำ"}]},
+    {t:"ภาษาไทย 5 ม.6/1",ind:[
+      {u:"1",un:"ช่ำชองอ่าน",s:"ท 1.1",n:"2",m:11,w:"ใบงานตีความแปลความขยายความ,แบบฝึกวิเคราะห์สาร,ทดสอบย่อย"},
+      {u:"2",un:"เชี่ยวชาญเขียน",s:"ท 2.1",n:"1",m:9,w:"ชิ้นงานเขียนสื่อสาร,ใบงานวิเคราะห์วัตถุประสงค์,แบบประเมินงานเขียน"},
+      {u:"3",un:"พากเพียรฟัง ดู พูด",s:"ท 3.1",n:"4",m:10,w:"ใบงานคัดเลือกสื่อ,บันทึกการฟังและดู,แบบประเมินการเลือกสาร"},
+      {u:"3",un:"พากเพียรฟัง ดู พูด",s:"ท 3.1",n:"5",m:6,w:"พูดในโอกาสต่างๆ,พูดโน้มน้าวใจ,แบบประเมินการพูด"},
+      {u:"4",un:"พิสูจน์หลักภาษา",s:"ท 4.1",n:"3",m:7,w:"ใบงานคำราชาศัพท์,แบบฝึกใช้ภาษาตามโอกาส,ทดสอบย่อย"},
+      {u:"4",un:"พิสูจน์หลักภาษา",s:"ท 4.1",n:"4",m:7,w:"ใบงานฉันทลักษณ์,ผลงานแต่งบทร้อยกรอง,แบบประเมินผลงาน"}]},
+  ],
+};
+/* สคริปต์วางใน Console ของ Q-Info เมนู 2.2.2 → คัดลอกโครงสร้างวิชาที่เปิดอยู่ (ใช้กับเทอม 2 / วิชาใหม่) */
+const QINFO_GRAB_SCRIPT=`(function(){if(typeof STRUCTS==='undefined'){alert('เปิดเมนู 2.2.2 โครงสร้างรายวิชา แล้วเลือกวิชาก่อน');return;}var U='',N='';var ind=Object.values(STRUCTS).filter(function(x){return x&&x.knowledgeid;}).sort(function(a,b){return a.sortnumber-b.sortnumber;}).map(function(x){if(x.knowledgenumber){U=x.knowledgenumber;N=x.knowname;}return{u:String(x.knowledgenumber||U),un:x.knowname||N,s:x.learnstdid,n:String(x.knowledgeresultno),m:+x.point||0,w:x.assignment||''};}).filter(function(x){return x.m>0;});var act=document.querySelector('.owl-item .active, a.active[href], .tab-active');var txt=JSON.stringify({t:act?act.innerText.trim():'',ind:ind});try{copy(txt);alert('คัดลอกโครงสร้างแล้ว ('+ind.length+' ตัวชี้วัด) — นำไปวางในระบบบันทึกการสอน');}catch(e){prompt('คัดลอกข้อความนี้',txt);}})();`;
+
+const indKey=(i)=>String(i.u)+"|"+String(i.s)+"|"+String(i.n);
+const indLabel=(i)=>"หน่วย "+i.u+" · "+i.s+"/"+i.n;
+const roundTo=(x,d)=>{ const f=Math.pow(10,d); return Math.round((x+1e-9)*f)/f; };
+const gradeOf=(p)=>p>=80?"4":p>=75?"3.5":p>=70?"3":p>=65?"2.5":p>=60?"2":p>=55?"1.5":p>=50?"1":"0";
+function dice(a,b){ const bg=(s)=>{ const r=[]; for(let i=0;i<s.length-1;i++) r.push(s.slice(i,i+2)); return r; };
+  const A=bg(a),B=bg(b); if(!A.length||!B.length) return 0; const m={}; B.forEach(x=>m[x]=(m[x]||0)+1);
+  let hit=0; A.forEach(x=>{ if(m[x]){ hit++; m[x]--; } }); return 2*hit/(A.length+B.length); }
+
+/* เทียบงานอัตโนมัติ: คำว่าสอบกลาง/ปลายภาค → รหัสตัวชี้วัด (1.1/2) → "หน่วยที่ n" → ชื่อคล้ายภาระงานใน Q-Info → ที่เหลือไล่ตามลำดับงาน */
+function autoMapQ(list,cfg,oldMap,overwrite){
+  const ind=(cfg&&cfg.ind)||[]; const map=overwrite?{}:{...(oldMap||{})};
+  const units=[...new Set(ind.map(i=>String(i.u)))];
+  const clean=(s)=>String(s||"").replace(/\s+/g,"").toLowerCase();
+  const pending=[];
+  list.forEach(a=>{
+    if(map[a.id]!==undefined) return;             // เคยเทียบเอง/เลือกไว้แล้ว → ไม่แตะ
+    const t=clean(a.title); let tg=null;
+    if(/กลางภาค|กลางเทอม|midterm/.test(t)) tg="mid";
+    else if(/ปลายภาค|ปลายเทอม|final/.test(t)) tg="fin";
+    if(!tg){ const m=t.match(/(\d+)\.(\d+)\/(\d+)/); if(m){ const f=ind.find(i=>clean(i.s).endsWith(m[1]+"."+m[2])&&String(i.n)===m[3]); if(f) tg="i:"+indKey(f); } }
+    if(!tg){ const m=t.match(/หน่วย(?:การเรียนรู้)?(?:ที่)?(\d+)/); if(m&&units.includes(m[1])){ const inU=ind.filter(i=>String(i.u)===m[1]); tg=inU.length===1?"i:"+indKey(inU[0]):"u:"+m[1]; } }
+    if(!tg){ let best=null,bs=0; ind.forEach(i=>{ [...String(i.w||"").split(/[,\n]/),i.un].forEach(c=>{ const sc=dice(t,clean(c)); if(sc>bs){ bs=sc; best=i; } }); });
+      if(best&&bs>=0.5) tg="i:"+indKey(best); }
+    if(tg) map[a.id]=tg; else pending.push(a);
+  });
+  if(pending.length && ind.length){
+    const covered=new Set();
+    Object.values(map).forEach(v=>{ if(!v) return; if(v.startsWith("i:")) covered.add(v.slice(2)); if(v.startsWith("u:")) ind.filter(i=>String(i.u)===v.slice(2)).forEach(i=>covered.add(indKey(i))); });
+    const empty=ind.filter(i=>!covered.has(indKey(i)));
+    if(empty.length){ pending.forEach((a,k)=>{ map[a.id]="i:"+indKey(empty[Math.min(empty.length-1,Math.floor(k*empty.length/pending.length))]); }); }
+    else pending.forEach(a=>{ const pos=list.indexOf(a); let tg=null;
+      for(let j=pos-1;j>=0&&!tg;j--){ const v=map[list[j].id]; if(v&&(v.startsWith("i:")||v.startsWith("u:"))) tg=v; }
+      for(let j=pos+1;j<list.length&&!tg;j++){ const v=map[list[j].id]; if(v&&(v.startsWith("i:")||v.startsWith("u:"))) tg=v; }
+      map[a.id]=tg||("i:"+indKey(ind[0])); });
+  }
+  return map;
+}
+
+/* คำนวณคะแนนที่แปลงแล้วของนักเรียนทุกคน */
+function computeQ(students,list,subjScores,cfg,map){
+  const ind=(cfg&&cfg.ind)||[]; const dec=Number(cfg&&cfg.dec)||0;
+  const buckets=ind.map(i=>({key:indKey(i),i,label:indLabel(i),max:Number(i.m)||0,
+    asg:list.filter(a=>map[a.id]==="i:"+indKey(i)||map[a.id]==="u:"+i.u)}));
+  buckets.push({key:"mid",label:"สอบกลางภาค",max:Number(cfg&&cfg.mid)||0,asg:list.filter(a=>map[a.id]==="mid")});
+  buckets.push({key:"fin",label:"สอบปลายภาค",max:Number(cfg&&cfg.fin)||0,asg:list.filter(a=>map[a.id]==="fin")});
+  buckets.forEach(b=>{ b.rawMax=b.asg.reduce((s,a)=>s+(Number(a.max)||0),0); b.factor=b.rawMax?b.max/b.rawMax:0; });
+  const fullMax=buckets.reduce((s,b)=>s+b.max,0);
+  const keepMax=buckets.filter(b=>b.i).reduce((s,b)=>s+b.max,0);
+  const rows=students.map(s=>{ const sc=subjScores[s.id]||{}; const vals={}; let missing=0;
+    buckets.forEach(b=>{ if(!b.asg.length||!b.rawMax||!b.max){ vals[b.key]=null; return; }
+      let raw=0,has=false; b.asg.forEach(a=>{ const n=numOf(sc[a.id]); if(n!=null){ raw+=n; has=true; } else missing++; });
+      vals[b.key]=has?Math.min(b.max,roundTo(raw/b.rawMax*b.max,dec)):null; });
+    const keep=roundTo(buckets.filter(b=>b.i).reduce((t,b)=>t+(vals[b.key]||0),0),dec);
+    const total=roundTo(keep+(vals.mid||0)+(vals.fin||0),dec);
+    return {s,vals,keep,total,missing,grade:fullMax?gradeOf(total/fullMax*100):"-"};
+  });
+  return {buckets,rows,fullMax,keepMax};
+}
+
+/* สคริปต์ที่ครูนำไปวางใน Console ของ Q-Info เมนู 2.2.7 → กรอกคะแนนให้ทุกแผ่นงาน (ยังไม่กดบันทึกให้) */
+const QINFO_FILL_BODY=String.raw`(async function(P){
+var DRY=!!P.dry;
+if(!window.jQuery||!jQuery('#dataTable').length){alert('ไม่พบตารางคะแนน — เปิด Q-Info เมนู 2.2.7 ประเมินตัวชี้วัด และคลิกเลือกวิชา '+P.title+' ก่อน');return;}
+var H=jQuery('#dataTable').handsontable('getInstance');
+var norm=function(s){return String(s||'').trim().replace(/^(เด็กชาย|เด็กหญิง|นางสาว|นาย|นาง|ด\.ช\.|ด\.ญ\.|น\.ส\.)\s*/,'').replace(/\s+/g,'').toLowerCase();};
+var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
+if(!DRY&&!confirm('กรอกคะแนนวิชา '+P.title+' (ภาคเรียนที่ '+P.term+') ลง Q-Info ?\n\nระบบจะกรอกให้ทุกแผ่นงาน แล้วให้ครูตรวจก่อนกดปุ่ม "บันทึก" เอง'))return;
+var lis=[].slice.call(document.querySelectorAll('#sheets li'));if(!lis.length)lis=[null];
+var filled=0,foundCols={},seen={},qOnly={},report=[];
+for(var x=0;x<lis.length;x++){
+ if(lis[x]){lis[x].click();await sleep(1300);}
+ var d=H.getData();var isExam=lis[x]?/สอบ/.test(lis[x].innerText):false;var colMap={};
+ for(var c=2;c<d[0].length;c++){
+  if(!isExam&&d[4]&&d[4][c]==='คะแนน'){var key=String(d[0][c]).trim()+'|'+String(d[1][c]).replace(/\s+/g,'')+'|'+String(d[2][c]).trim();if(P.ind[key]){colMap[c]=P.ind[key];foundCols[key]=1;}}
+  if(isExam){var h=String(d[0][c]||'');if(/กลางภาค/.test(h)&&P.mid){colMap[c]=P.mid;foundCols.mid=1;}if(/ปลายภาค/.test(h)&&P.fin){colMap[c]=P.fin;foundCols.fin=1;}}
+ }
+ var ch=[];
+ for(var r=5;r<d.length;r++){var nm=d[r][1];if(!nm)continue;var k=norm(nm);seen[k]=1;
+  for(var cc in colMap){var v=colMap[cc][k];if(v===undefined){qOnly[nm]=1;continue;}if(v===null||v==='')continue;ch.push([r,+cc,v]);}}
+ report.push((lis[x]?lis[x].innerText.trim():'ตาราง')+': '+ch.length+' ช่อง');
+ if(ch.length&&!DRY){H.setDataAtCell(ch);await sleep(700);}
+ filled+=ch.length;
+}
+if(lis[0]&&lis.length>1){lis[0].click();await sleep(800);}
+var need=Object.keys(P.ind).length+(P.mid?1:0)+(P.fin?1:0);var got=Object.keys(foundCols).length;
+var appOnly=Object.keys(P.names).filter(function(k){return !seen[k];}).map(function(k){return P.names[k];});
+var msg=(DRY?'[ทดสอบ ไม่ได้กรอกจริง]\n':'')+'กรอกแล้ว '+filled+' ช่อง ('+report.join(', ')+')\nพบคอลัมน์ตรงกัน '+got+'/'+need;
+if(got<need)msg+='\n⚠ บางตัวชี้วัดไม่ตรงกับ Q-Info — ตรวจว่าเลือกวิชาถูก/โครงสร้างตรงกัน';
+if(Object.keys(qOnly).length)msg+='\n⚠ มีใน Q-Info แต่ไม่พบในระบบ: '+Object.keys(qOnly).join(', ');
+if(appOnly.length)msg+='\n⚠ มีในระบบแต่ไม่พบใน Q-Info: '+appOnly.join(', ');
+if(!DRY)msg+='\n\nตรวจความถูกต้อง แล้วกดปุ่ม "บันทึก" ของ Q-Info';
+console.log(msg);alert(msg);return msg;
+})`;
+function buildFillScript(subj,cfg,term,res,dry){
+  const P={title:subj.name+" "+subj.room,term,dry:!!dry,ind:{},mid:null,fin:null,names:{}};
+  res.rows.forEach(r=>{ P.names[normName(r.s.name)]=r.s.number+" "+r.s.name; });
+  res.buckets.forEach(b=>{ if(!b.asg.length) return; const dict={};
+    res.rows.forEach(r=>{ dict[normName(r.s.name)]=r.vals[b.key]; });
+    if(b.i) P.ind[String(b.i.u)+"|"+String(b.i.s).replace(/\s+/g,"")+"|"+String(b.i.n)]=dict;
+    else if(b.key==="mid") P.mid=dict; else if(b.key==="fin") P.fin=dict; });
+  return "// ระบบบันทึกการสอนครูนนท์ → Q-Info : "+P.title+" ภาคเรียนที่ "+term+"\n"+QINFO_FILL_BODY+"("+JSON.stringify(P)+");";
+}
+async function copyText(text){ try{ await navigator.clipboard.writeText(text); return true; }catch(e){
+  try{ const ta=document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select(); const ok=document.execCommand("copy"); document.body.removeChild(ta); return ok; }catch(e2){ return false; } } }
+
+function QinfoView({subj,students,assignments,scores,qinfo,setQinfo}){
+  const persist=usePersist();
+  const [term,setTerm]=useState("1");
+  const docId=subj.id+"_t"+term;
+  const cfg=qinfo[docId]||null;
+  const list=assignments[subj.id]||[];
+  const subjScores=scores[subj.id]||{};
+  const map=(cfg&&cfg.map)||{};
+  const presets=QINFO_PRESETS["2569/"+term]||[];
+  const guess=presets.findIndex(p=>subj.room&&p.t.replace(/\s/g,"").includes(String(subj.room).replace(/\s/g,"")));
+  const [presetIdx,setPresetIdx]=useState(guess>=0?String(guess):"");
+  useEffect(()=>{ setPresetIdx(guess>=0?String(guess):""); },[term,subj.id]);
+  const [paste,setPaste]=useState(""); const [editing,setEditing]=useState(false);
+  const [toast,setToast]=useState(null);
+  useEffect(()=>{ if(!toast) return; const t=setTimeout(()=>setToast(null),3200); return ()=>clearTimeout(t); },[toast]);
+  const [showCode,setShowCode]=useState(null);
+
+  const save=(next)=>{ const c={...next,subjectId:subj.id,term,updatedAt:Date.now()};
+    setQinfo(p=>({...p,[docId]:c})); persist.setQinfo(docId,c); };
+  const applyStructure=(src)=>{
+    if(!src||!Array.isArray(src.ind)||!src.ind.length) return setToast({ok:false,text:"ไม่พบข้อมูลตัวชี้วัด"});
+    const ind=src.ind.map(i=>({u:String(i.u),un:i.un||"",s:i.s,n:String(i.n),m:Number(i.m)||0,w:i.w||""})).filter(i=>i.m>0);
+    const base={title:src.t||"",ind,mid:cfg?cfg.mid:20,fin:cfg?cfg.fin:30,dec:cfg?cfg.dec:0,map:{}};
+    const keys=new Set(ind.map(i=>"i:"+indKey(i)));      // เก็บการเทียบเดิมที่ยังใช้ได้
+    Object.entries(map).forEach(([k,v])=>{ if(v===""||v==="mid"||v==="fin"||keys.has(v)||(v.startsWith("u:")&&ind.some(i=>"u:"+i.u===v))) base.map[k]=v; });
+    base.map=autoMapQ(list,base,base.map,false);
+    save(base); setEditing(false); setPaste("");
+    setToast({ok:true,text:"ใช้โครงสร้าง "+ind.length+" ตัวชี้วัด และเทียบงานอัตโนมัติแล้ว"});
+  };
+  const importPaste=()=>{ try{ applyStructure(JSON.parse(paste.trim())); }catch(e){ setToast({ok:false,text:"รูปแบบข้อความไม่ถูกต้อง"}); } };
+  const setMap=(aid,v)=>{ const m={...map}; if(v==="__none") delete m[aid]; else m[aid]=v; save({...cfg,map:m}); };
+  const runAuto=(overwrite)=>{ if(overwrite&&!window.confirm("ล้างการเทียบเดิมทั้งหมด แล้วให้ระบบเทียบใหม่?")) return;
+    save({...cfg,map:autoMapQ(list,cfg,map,overwrite)}); setToast({ok:true,text:"เทียบงานอัตโนมัติเรียบร้อย — ตรวจทานได้ด้านล่าง"}); };
+
+  const res=useMemo(()=>cfg?computeQ(students,list,subjScores,cfg,map):null,[cfg,students,list,subjScores]);
+
+  const exportXlsx=()=>{
+    const B=res.buckets; const dec=Number(cfg.dec)||0;
+    const h1=["เลขที่","ชื่อ-สกุล",...B.filter(b=>b.i).map(b=>b.label+" ("+b.max+")"),"รวมเก็บ ("+res.keepMax+")","กลางภาค ("+(cfg.mid||0)+")","ปลายภาค ("+(cfg.fin||0)+")","รวม ("+res.fullMax+")","เกรด"];
+    const rows=res.rows.map(r=>[r.s.number,r.s.name,...B.filter(b=>b.i).map(b=>r.vals[b.key]==null?"":r.vals[b.key]),r.keep,r.vals.mid==null?"":r.vals.mid,r.vals.fin==null?"":r.vals.fin,r.total,r.grade]);
+    const ws=XLSX.utils.aoa_to_sheet([h1,...rows]); ws["!cols"]=[{wch:7},{wch:26},...h1.slice(2).map(()=>({wch:13}))];
+    const m1=[["งานในระบบ","คะแนนเต็ม","เทียบกับ (Q-Info)","คะแนนเต็มใน Q-Info","ตัวคูณแปลง"]];
+    list.forEach(a=>{ const v=map[a.id]; const b=B.find(b=>(b.i&&(v==="i:"+b.key||v==="u:"+b.i.u))||b.key===v);
+      m1.push([a.title,a.max,v===undefined?"(ยังไม่เทียบ)":v===""?"ไม่นำไปคิด":v.startsWith("u:")?"ทั้งหน่วย "+v.slice(2):b?b.label:"",b?b.max:"",b&&b.factor?roundTo(b.factor,4):""]); });
+    m1.push([]); m1.push(["ช่องคะแนน Q-Info","คะแนนเต็ม","งานที่เทียบ","คะแนนดิบเต็ม","ตัวคูณ"]);
+    B.forEach(b=>m1.push([b.label,b.max,b.asg.map(a=>a.title).join(", ")||"— ไม่มีงาน —",b.rawMax,b.factor?roundTo(b.factor,4):""]));
+    m1.push([]); m1.push(["สูตร: คะแนนตัวชี้วัด = (ผลรวมคะแนนงานที่เทียบ ÷ ผลรวมคะแนนเต็มของงาน) × คะแนนเต็มใน Q-Info  ปัดทศนิยม "+dec+" ตำแหน่ง"]);
+    const ws2=XLSX.utils.aoa_to_sheet(m1); ws2["!cols"]=[{wch:32},{wch:11},{wch:40},{wch:14},{wch:10}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"คะแนนแปลงQ-Info"); XLSX.utils.book_append_sheet(wb,ws2,"การเทียบงาน");
+    XLSX.writeFile(wb,"QInfo_ภาค"+term+"_"+subj.name+"_"+subj.room+".xlsx");
+  };
+  const copyFill=async()=>{ const s=buildFillScript(subj,cfg,term,res,false); const ok=await copyText(s);
+    if(ok) setToast({ok:true,text:"คัดลอกสคริปต์แล้ว — ไปวางใน Console ของ Q-Info เมนู 2.2.7"}); else setShowCode(s); };
+
+  const unmapped=list.filter(a=>map[a.id]===undefined).length;
+  const emptyB=res?res.buckets.filter(b=>b.max>0&&!b.asg.length):[];
+  const opts=cfg?[
+    ...cfg.ind.map(i=>({v:"i:"+indKey(i),t:indLabel(i)+" — เต็ม "+i.m})),
+    ...[...new Set(cfg.ind.map(i=>String(i.u)))].filter(u=>cfg.ind.filter(i=>String(i.u)===u).length>1).map(u=>({v:"u:"+u,t:"ทั้งหน่วย "+u+" (ทุกตัวชี้วัดในหน่วย)"})),
+    {v:"mid",t:"สอบกลางภาค — เต็ม "+(cfg.mid||0)},{v:"fin",t:"สอบปลายภาค — เต็ม "+(cfg.fin||0)},{v:"",t:"ไม่นำไปคิด"}]:[];
+  const numIn={...inputStyle,width:72,padding:"6px 8px",textAlign:"center"};
+
+  return <div style={{display:"grid",gap:14,gridTemplateColumns:"minmax(0,1fr)"}}>
+    <SectionHead title="เทียบคะแนน Q-Info" right={<div className="seg">
+      {["1","2"].map(t=><button key={t} className={term===t?"on":""} onClick={()=>{setTerm(t);setEditing(false);}}>ภาคเรียนที่ {t}</button>)}</div>}/>
+
+    {/* ① โครงสร้าง */}
+    <div style={panel}>
+      <div style={panelHead}><span className="qi-step">1</span>โครงสร้างคะแนนใน Q-Info {cfg&&cfg.title?<span style={{fontSize:13,color:SUB,fontWeight:500}}>({cfg.title})</span>:null}</div>
+      {(!cfg||editing) ? <div>
+        {presets.length>0 && <Field label={"เลือกจากข้อมูลที่ดึงจาก Q-Info ปีการศึกษา 2569 ภาคเรียนที่ "+term}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <select style={{...inputStyle,flex:"1 1 220px",width:"auto"}} value={presetIdx} onChange={e=>setPresetIdx(e.target.value)}>
+              <option value="">— เลือกวิชา —</option>
+              {presets.map((p,i)=><option key={i} value={i}>{p.t} ({p.ind.length} ตัวชี้วัด / {p.ind.reduce((s,x)=>s+x.m,0)} คะแนน)</option>)}
+            </select>
+            <Btn variant="primary" disabled={presetIdx===""} onClick={()=>applyStructure(presets[Number(presetIdx)])}><Save size={15}/>ใช้โครงสร้างนี้</Btn>
+          </div></Field>}
+        <details style={{fontSize:13.5,color:C.text}} open={!presets.length}>
+          <summary style={{cursor:"pointer",fontWeight:600,color:C.navy,marginBottom:8}}>ดึงโครงสร้างวิชาอื่น / ภาคเรียนใหม่ จาก Q-Info</summary>
+          <ol style={{margin:"6px 0 10px",paddingLeft:20,lineHeight:1.7,color:SUB}}>
+            <li>เปิด Q-Info → เลือกภาคเรียน → เมนู <b>2.2.2 โครงสร้างรายวิชา</b> → คลิกวิชา</li>
+            <li>กด <kbd>F12</kbd> → แท็บ Console → วางสคริปต์ด้านล่าง → <kbd>Enter</kbd> (ครั้งแรก Chrome อาจให้พิมพ์ allow pasting)</li>
+            <li>กลับมาวางข้อความที่ได้ในช่องด้านล่าง แล้วกด “นำเข้า”</li>
+          </ol>
+          <div style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:10}}>
+            <pre className="qi-code" style={{flex:1}}>{QINFO_GRAB_SCRIPT}</pre>
+            <Btn variant="soft" size="sm" onClick={async()=>setToast({ok:await copyText(QINFO_GRAB_SCRIPT),text:"คัดลอกสคริปต์ดึงโครงสร้างแล้ว"})}><Copy size={14}/>คัดลอก</Btn>
+          </div>
+          <textarea style={{...inputStyle,minHeight:80,fontSize:12.5}} value={paste} onChange={e=>setPaste(e.target.value)} placeholder='วางข้อความ {"t":"...","ind":[...]} ที่นี่'/>
+          <div style={{display:"flex",gap:8,marginTop:8}}><Btn variant="primary" size="sm" disabled={!paste.trim()} onClick={importPaste}><Upload size={14}/>นำเข้า</Btn>
+            {cfg && <Btn variant="ghost" size="sm" onClick={()=>setEditing(false)}>ยกเลิก</Btn>}</div>
+        </details>
+      </div> : <div>
+        <div style={{...tableWrap,marginBottom:12}}><table style={{...tableStyle,fontSize:13.5}}>
+          <thead><tr><th style={th}>หน่วย</th><th style={th}>ตัวชี้วัด</th><th style={th}>เต็ม</th><th style={{...th,textAlign:"left"}}>ภาระงานใน Q-Info</th></tr></thead>
+          <tbody>{cfg.ind.map(i=><tr key={indKey(i)} className="tl-row">
+            <td style={{...td,textAlign:"center",padding:"7px 8px"}}>{i.u}</td>
+            <td style={{...td,whiteSpace:"nowrap",padding:"7px 8px"}}>{i.s}/{i.n}</td>
+            <td style={{...td,textAlign:"center",fontWeight:700,color:C.accent,padding:"7px 8px"}}>{i.m}</td>
+            <td style={{...td,fontSize:12.5,color:SUB,padding:"7px 8px"}}><b style={{color:C.text}}>{i.un}</b> · {i.w}</td></tr>)}</tbody>
+        </table></div>
+        <div style={{display:"flex",gap:14,flexWrap:"wrap",alignItems:"center",fontSize:13.5}}>
+          <span>คะแนนเก็บ <b>{cfg.ind.reduce((s,i)=>s+i.m,0)}</b></span>
+          <label style={{display:"flex",alignItems:"center",gap:6}}>กลางภาค<input style={numIn} type="number" value={cfg.mid} onChange={e=>save({...cfg,mid:Number(e.target.value)||0})}/></label>
+          <label style={{display:"flex",alignItems:"center",gap:6}}>ปลายภาค<input style={numIn} type="number" value={cfg.fin} onChange={e=>save({...cfg,fin:Number(e.target.value)||0})}/></label>
+          <label style={{display:"flex",alignItems:"center",gap:6}}>ปัดทศนิยม<select style={{...numIn,width:64}} value={cfg.dec||0} onChange={e=>save({...cfg,dec:Number(e.target.value)})}><option value={0}>0</option><option value={1}>1</option><option value={2}>2</option></select></label>
+          <Btn variant="ghost" size="sm" onClick={()=>setEditing(true)} style={{marginLeft:"auto"}}><Pencil size={14}/>เปลี่ยนโครงสร้าง</Btn>
+        </div>
+      </div>}
+    </div>
+
+    {/* ② เทียบงาน */}
+    {cfg && !editing && <div style={panel}>
+      <div style={{...panelHead,flexWrap:"wrap"}}><span className="qi-step">2</span>เทียบงานในระบบ → ช่องคะแนน Q-Info
+        <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+          <Btn variant="accent" size="sm" onClick={()=>runAuto(false)}><Zap size={14}/>เทียบอัตโนมัติ{unmapped?" ("+unmapped+")":""}</Btn>
+          <Btn variant="ghost" size="sm" onClick={()=>runAuto(true)}>เทียบใหม่ทั้งหมด</Btn>
+        </div></div>
+      {list.length===0 && <div style={{color:SUB,fontSize:14}}>ยังไม่มีงานในเมนู “เช็คคะแนน”</div>}
+      {list.map(a=>{ const v=map[a.id]; return <div key={a.id} className="qi-map">
+        <div style={{minWidth:0}}><div style={{fontWeight:600,fontSize:14.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.title}</div>
+          <div style={{fontSize:12,color:SUB}}>เต็ม {a.max}</div></div>
+        <select style={{...inputStyle,padding:"8px 10px",fontSize:13.5,borderColor:v===undefined?"#e0a458":C.border,background:v===undefined?"#fff8ec":"#fff"}} value={v===undefined?"__none":v} onChange={e=>setMap(a.id,e.target.value)}>
+          <option value="__none">— ยังไม่เทียบ —</option>
+          {opts.map(o=><option key={o.v} value={o.v}>{o.t}</option>)}
+        </select>
+      </div>; })}
+      {res && <div style={{marginTop:12,display:"flex",flexWrap:"wrap",gap:6}}>
+        {res.buckets.filter(b=>b.max>0).map(b=><span key={b.key} title={b.asg.map(a=>a.title).join(", ")} style={{fontSize:12,padding:"4px 9px",borderRadius:20,fontWeight:600,
+          background:b.asg.length?"#e6f4ec":"#fbeae8",color:b.asg.length?"#2e7d52":"#c0392b"}}>
+          {b.label}: {b.asg.length?(b.asg.length+" งาน · "+b.rawMax+" → "+b.max):"ยังไม่มีงาน"}</span>)}
+      </div>}
+      {emptyB.length>0 && <div style={{marginTop:8,fontSize:12.5,color:"#c0392b"}}>ช่องที่ยังไม่มีงานเทียบ จะเว้นว่างตอนกรอก Q-Info</div>}
+    </div>}
+
+    {/* ③ ผลการแปลง */}
+    {cfg && !editing && res && <div style={panel}>
+      <div style={{...panelHead,flexWrap:"wrap"}}><span className="qi-step">3</span>คะแนนที่แปลงแล้ว (พร้อมกรอก Q-Info)
+        <div style={{marginLeft:"auto",display:"flex",gap:6,flexWrap:"wrap"}}>
+          <Btn variant="accent" size="sm" onClick={exportXlsx}><Download size={14}/>Export .xlsx</Btn>
+          <Btn variant="primary" size="sm" onClick={copyFill}><Copy size={14}/>คัดลอกสคริปต์กรอก Q-Info</Btn>
+        </div></div>
+      <div style={{...tableWrap,maxHeight:"60vh"}}><table style={{...tableStyle,fontSize:13.5}}>
+        <thead><tr>
+          <th style={{...th,width:40,zIndex:3}}>#</th>
+          <th style={{...th,textAlign:"left",minWidth:150,left:0,zIndex:3}}>ชื่อ-สกุล</th>
+          {res.buckets.filter(b=>b.i).map(b=><th key={b.key} style={{...th,minWidth:74,fontSize:12}}>{b.i.s}/{b.i.n}<div style={{fontWeight:400,fontSize:11,color:"#c7d4e2"}}>หน่วย {b.i.u} · {b.max}</div></th>)}
+          <th style={{...th,background:C.navyDark,fontSize:12}}>เก็บ<div style={{fontWeight:400,fontSize:11,color:"#c7d4e2"}}>{res.keepMax}</div></th>
+          <th style={{...th,fontSize:12}}>กลางภาค<div style={{fontWeight:400,fontSize:11,color:"#c7d4e2"}}>{cfg.mid||0}</div></th>
+          <th style={{...th,fontSize:12}}>ปลายภาค<div style={{fontWeight:400,fontSize:11,color:"#c7d4e2"}}>{cfg.fin||0}</div></th>
+          <th style={{...th,background:C.navyDark,fontSize:12}}>รวม<div style={{fontWeight:400,fontSize:11,color:"#c7d4e2"}}>{res.fullMax}</div></th>
+          <th style={{...th,background:C.accent,fontSize:12}}>เกรด</th>
+        </tr></thead>
+        <tbody>{res.rows.map(r=><tr key={r.s.id} className="tl-row">
+          <td style={{...td,textAlign:"center",color:SUB,padding:"7px 6px"}}>{r.s.number}</td>
+          <td style={{...td,position:"sticky",left:0,background:"inherit",whiteSpace:"nowrap",padding:"7px 10px"}}>{r.s.name}</td>
+          {res.buckets.filter(b=>b.i).map(b=><td key={b.key} style={{...td,textAlign:"center",padding:"7px 6px",color:r.vals[b.key]==null?"#c0c8d2":C.text}}>{r.vals[b.key]==null?"–":r.vals[b.key]}</td>)}
+          <td style={{...td,textAlign:"center",fontWeight:700,background:C.navySoft,padding:"7px 6px"}}>{r.keep}</td>
+          <td style={{...td,textAlign:"center",padding:"7px 6px"}}>{r.vals.mid==null?"–":r.vals.mid}</td>
+          <td style={{...td,textAlign:"center",padding:"7px 6px"}}>{r.vals.fin==null?"–":r.vals.fin}</td>
+          <td style={{...td,textAlign:"center",fontWeight:700,background:C.navySoft,padding:"7px 6px"}}>{r.total}</td>
+          <td style={{...td,textAlign:"center",fontWeight:700,color:C.accent,background:C.accentSoft,padding:"7px 6px"}}>{r.grade}</td>
+        </tr>)}</tbody>
+      </table></div>
+      <details style={{marginTop:12,fontSize:13.5}}>
+        <summary style={{cursor:"pointer",fontWeight:600,color:C.navy}}>วิธีกรอกลง Q-Info อัตโนมัติ (ภาคเรียนที่ {term})</summary>
+        <ol style={{margin:"8px 0 0",paddingLeft:20,lineHeight:1.75,color:SUB}}>
+          <li>กด <b>คัดลอกสคริปต์กรอก Q-Info</b> (ปุ่มด้านบน)</li>
+          <li>เปิด Q-Info → เลือก <b>ภาคเรียนที่ {term}</b> → เมนู <b>2.2.7 ประเมินตัวชี้วัด</b> → คลิกวิชา <b>{cfg.title||subj.name+" "+subj.room}</b></li>
+          <li>กด <kbd>F12</kbd> → Console → วาง → <kbd>Enter</kbd> → ยืนยัน · ระบบจะกรอกทุกแผ่นงาน (ตัวชี้วัด + คะแนนสอบ) ให้เอง จับคู่ด้วยชื่อ-สกุล</li>
+          <li>ตรวจตัวเลข แล้วกดปุ่ม <b>บันทึก</b> ของ Q-Info (สคริปต์ไม่กดบันทึกให้)</li>
+        </ol>
+        <div style={{marginTop:6,color:SUB}}>คะแนนแปลงจากสูตร (ผลรวมคะแนนงาน ÷ คะแนนเต็มงาน) × คะแนนเต็มตัวชี้วัด · นักเรียนที่ไม่มีคะแนนงานในช่องนั้นเลยจะเว้นว่าง · งานที่ไม่ได้ส่งนับเป็น 0</div>
+      </details>
+    </div>}
+
+    <Modal open={!!showCode} onClose={()=>setShowCode(null)} title="คัดลอกสคริปต์ด้วยตนเอง" width={640}>
+      <textarea readOnly style={{...inputStyle,minHeight:260,fontSize:11.5,fontFamily:"monospace"}} value={showCode||""} onFocus={e=>e.target.select()}/>
+    </Modal>
+    {toast && <div className="qs-toast" style={{background:toast.ok?"#2e7d52":"#c0392b"}}>{toast.text}</div>}
   </div>;
 }
 
