@@ -187,6 +187,9 @@ const Table=(p)=><Ico {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><p
 const Undo=(p)=><Ico {...p}><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></Ico>;
 const Shuffle=(p)=><Ico {...p}><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></Ico>;
 const Copy=(p)=><Ico {...p}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Ico>;
+const Bell=(p)=><Ico {...p}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></Ico>;
+const Printer=(p)=><Ico {...p}><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></Ico>;
+const Chat=(p)=><Ico {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></Ico>;
 const Hash=(p)=><Ico {...p}><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></Ico>;
 
 /* ---------- Persist (เขียนลง Firestore) ---------- */
@@ -344,8 +347,9 @@ function App(){
       {view==="home" && <HomeView subjects={subjects} setSubjects={setSubjects} openSubject={openSubject} students={students} setStudents={setStudents}/>}
       {view==="class" && subj && <ClassView subj={subj} setView={setView} students={students[subj.id]||[]}/>}
       {view==="attendance" && subj && <AttendanceView subj={subj} students={students[subj.id]||[]} attendance={attendance} setAttendance={setAttendance}/>}
-      {view==="scores" && subj && <ScoresView subj={subj} students={students[subj.id]||[]} assignments={assignments} setAssignments={setAssignments} scores={scores} setScores={setScores}/>}
+      {view==="scores" && subj && <ScoresView subj={subj} setView={setView} students={students[subj.id]||[]} assignments={assignments} setAssignments={setAssignments} scores={scores} setScores={setScores}/>}
       {view==="notes" && subj && <NotesView subj={subj} notes={notes} setNotes={setNotes}/>}
+      {view==="pending" && subj && <PendingView subj={subj} students={students[subj.id]||[]} assignments={assignments} scores={scores} logoUrl={logoUrl}/>}
       {view==="qinfo" && subj && <QinfoView subj={subj} students={students[subj.id]||[]} assignments={assignments} scores={scores} qinfo={qinfo} setQinfo={setQinfo}/>}
       {view==="settings" && <SettingsView subjects={subjects} students={students} setStudents={setStudents} logoUrl={logoUrl} setLogoUrl={setLogoUrl}/>}
     </main>
@@ -409,6 +413,7 @@ function ClassView({subj,setView,students}){
     {key:"attendance",icon:CheckSquare,title:"เช็คชื่อ",desc:"บันทึกการมาเรียนรายวัน",color:"#2c6e9c"},
     {key:"scores",icon:ClipboardList,title:"เช็คคะแนน",desc:"บันทึกคะแนนงาน/ชิ้นงาน",color:C.accent},
     {key:"notes",icon:NotebookPen,title:"บันทึกช่วยจำ",desc:"โน้ตประจำชั้นเรียน",color:"#3c7a5a"},
+    {key:"pending",icon:Bell,title:"สรุปงานค้าง",desc:"แจ้งนักเรียนรายบุคคล/ทั้งห้อง · คัดลอกส่งไลน์ · พิมพ์/PDF",color:"#c0392b"},
     {key:"qinfo",icon:Shuffle,title:"เทียบคะแนน Q-Info",desc:"เทียบงาน → ตัวชี้วัด แปลงคะแนนหน่วยอัตโนมัติ + Export",color:"#7a3ea0"},
   ];
   return <div>
@@ -483,7 +488,7 @@ function AttendanceView({subj,students,attendance,setAttendance}){
 }
 
 /* ---------- SCORES ---------- */
-function ScoresView({subj,students,assignments,setAssignments,scores,setScores}){
+function ScoresView({subj,setView,students,assignments,setAssignments,scores,setScores}){
   const persist=usePersist();
   const list=assignments[subj.id]||[];
   const subjScores=scores[subj.id]||{};
@@ -531,6 +536,7 @@ function ScoresView({subj,students,assignments,setAssignments,scores,setScores})
     <SectionHead title="เช็คคะแนน" right={<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
       <Btn variant="soft" size="sm" onClick={convertAll} title="แปลงคำอ่านภาษาไทย/เลขไทย เป็นตัวเลข"><Hash size={15}/>แปลงเป็นตัวเลข</Btn>
       <Btn variant="ghost" size="sm" onClick={openAddAssignment}><Plus size={15}/>เพิ่มงาน</Btn>
+      <Btn variant="soft" size="sm" onClick={()=>setView("pending")} title="สรุปงานค้างแจ้งนักเรียน"><Bell size={15}/>งานค้าง</Btn>
       <Btn variant="accent" size="sm" onClick={exportXlsx}><Download size={15}/>Export</Btn>
     </div>}/>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
@@ -765,6 +771,249 @@ function QuickScore({students,list,subjScores,setScore,onAddAssignment}){
     </div>}
 
     {msg && <div className="qs-toast" style={{background:msg.ok?"#2e7d52":"#c0392b"}}>{msg.text}</div>}
+  </div>;
+}
+
+/* ==================== สรุปงานค้างแจ้งนักเรียน ====================
+   งานค้าง = ช่องคะแนนว่าง หรือไม่ใช่ตัวเลข (เช่น ร, มส) · เลือกนับ 0 เป็นงานค้างได้
+   ส่งออก: ข้อความสำหรับไลน์ (รายบุคคล / ทั้งห้อง) และหน้าพิมพ์ A4 (บันทึกเป็น PDF ได้)
+------------------------------------------------------------------ */
+const escHtml=(s)=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtDateLong=(s)=>{ if(!s) return ""; const d=new Date(s+"T00:00:00"); return d.toLocaleDateString("th-TH",{day:"numeric",month:"long",year:"numeric"}); };
+const firstName=(name)=>String(name||"").replace(NAME_PREFIX,"").trim().split(/\s+/)[0]||name;
+function pendingList(students,list,subjScores,countZero){
+  return students.map(s=>{ const sc=subjScores[s.id]||{};
+    const miss=list.filter(a=>{ const v=sc[a.id]; if(v==null||String(v).trim()==="") return true;
+      const n=numOf(v); if(n==null) return true; return countZero && n===0; });
+    return {s,miss}; });
+}
+function pendingNoteOf(v){ const t=String(v==null?"":v).trim(); return t&&numOf(t)==null?t:""; }   // เช่น "ร", "มส"
+
+/* เปิดหน้าต่างพิมพ์ (ผู้ใช้เลือก "บันทึกเป็น PDF" ได้) */
+function openPrint(title,bodyHtml){
+  const w=window.open("","_blank");
+  if(!w){ alert("เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาต Pop-up สำหรับเว็บนี้ก่อน"); return; }
+  w.document.open();
+  w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escHtml(title)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+ @page{ size:A4; margin:14mm 15mm; }
+ *{ box-sizing:border-box; }
+ body{ font-family:'Sarabun','TH SarabunPSK',sans-serif; font-size:14.5pt; line-height:1.45; color:#000; margin:0; background:#fff; }
+ .bar{ position:sticky; top:0; background:#1f3a5f; color:#fff; padding:10px 16px; display:flex; gap:10px; align-items:center; font-size:12pt; }
+ .bar button{ font-family:inherit; font-size:12pt; padding:6px 16px; border:none; border-radius:6px; background:#c2703d; color:#fff; cursor:pointer; font-weight:600; }
+ .page{ max-width:180mm; margin:0 auto; padding:10mm 0; }
+ h1{ font-size:18pt; text-align:center; margin:0 0 2pt; }
+ .sub{ text-align:center; margin:0 0 10pt; }
+ .logo{ display:block; margin:0 auto 4pt; width:52px; height:52px; object-fit:contain; }
+ table{ width:100%; border-collapse:collapse; margin:6pt 0; }
+ th,td{ border:1px solid #333; padding:3pt 6pt; vertical-align:top; }
+ th{ background:#eee; font-weight:700; text-align:center; }
+ td.c{ text-align:center; }
+ .meta{ margin:6pt 0; }
+ .sign{ display:flex; justify-content:space-around; gap:10pt; margin-top:18pt; text-align:center; }
+ .sign div{ min-width:52mm; }
+ .slip{ border:1px solid #333; border-radius:6px; padding:8pt 12pt; margin-bottom:8mm; break-inside:avoid; page-break-inside:avoid; position:relative; }
+ .slip:after{ content:"✂ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"; position:absolute; left:0; right:0; bottom:-6.5mm; font-size:9pt; color:#999; white-space:nowrap; overflow:hidden; }
+ .slip h2{ font-size:15.5pt; margin:0; text-align:center; }
+ .slip .sign{ margin-top:10pt; }
+ .small{ font-size:12pt; color:#333; }
+ @media print{ .bar{ display:none; } .page{ padding:0; } }
+</style></head><body>
+<div class="bar"><b style="flex:1">${escHtml(title)}</b><button onclick="window.print()">พิมพ์ / บันทึกเป็น PDF</button></div>
+<div class="page">${bodyHtml}</div>
+<script>(document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(function(){setTimeout(function(){window.print();},350);});<\/script>
+</body></html>`);
+  w.document.close();
+}
+
+function PendingView({subj,students,assignments,scores,logoUrl}){
+  const list=assignments[subj.id]||[];
+  const subjScores=scores[subj.id]||{};
+  const LS=(k,d)=>{ try{ const v=localStorage.getItem("tl_pd_"+k); return v==null?d:v; }catch(e){ return d; } };
+  const setLS=(k,v)=>{ try{ localStorage.setItem("tl_pd_"+k,v); }catch(e){} };
+  const [mode,setMode]=useState(()=>LS("mode","class"));               // class | person
+  const [groupBy,setGroupBy]=useState(()=>LS("group","student"));      // student | work
+  const [picked,setPicked]=useState(()=>new Set(list.map(a=>a.id)));
+  useEffect(()=>{ setPicked(p=>{ const n=new Set(p); list.forEach(a=>{ if(!known.current.has(a.id)){ n.add(a.id); known.current.add(a.id);} }); return n; }); },[list]);
+  const known=useRef(new Set(list.map(a=>a.id)));
+  const [countZero,setCountZero]=useState(()=>LS("zero","0")==="1");
+  const [shortName,setShortName]=useState(()=>LS("short","0")==="1");
+  const [due,setDue]=useState("");
+  const [note,setNote]=useState(()=>LS("note","ขอให้นักเรียนติดตามส่งงานให้ครบถ้วน"));
+  const [teacher,setTeacher]=useState(()=>LS("teacher","นายนนทพัทธ์ หิรัญเรือง"));
+  const [school,setSchool]=useState(()=>LS("school","โรงเรียนกระดุมทองวิทยา"));
+  const [q,setQ]=useState(""); const [cur,setCur]=useState(null);
+  const [toast,setToast]=useState(null);
+  useEffect(()=>{ if(!toast) return; const t=setTimeout(()=>setToast(null),2600); return ()=>clearTimeout(t); },[toast]);
+
+  const chosen=list.filter(a=>picked.has(a.id));
+  const rows=useMemo(()=>pendingList(students,chosen,subjScores,countZero),[students,chosen.map(a=>a.id).join(),subjScores,countZero]);
+  const late=rows.filter(r=>r.miss.length);
+  const totalMiss=late.reduce((t,r)=>t+r.miss.length,0);
+  const byWork=chosen.map(a=>({a,who:rows.filter(r=>r.miss.includes(a)).map(r=>r.s)})).filter(x=>x.who.length);
+  const dn=(s)=>shortName?firstName(s.name):s.name;
+  const today=fmtDateLong(todayStr());
+  const subjLine=subj.name+(subj.code?" ("+subj.code+")":"")+" ห้อง "+subj.room;
+
+  /* ---------- ข้อความไลน์ ---------- */
+  const tail=()=>{ const t=[]; if(due) t.push("กำหนดส่งภายใน "+fmtDateLong(due)); if(note.trim()) t.push(note.trim()); if(teacher.trim()) t.push("— "+teacher.trim()); return t.length?"\n"+t.join("\n"):""; };
+  const textClass=()=>{
+    const head="แจ้งงานค้าง วิชา"+subjLine+"\nข้อมูล ณ วันที่ "+today+"\n";
+    if(!late.length) return head+"\nนักเรียนส่งงานครบทุกคน ขอบคุณครับ/ค่ะ"+tail();
+    let body="";
+    if(groupBy==="work") body=byWork.map(x=>"■ "+x.a.title+" (ค้าง "+x.who.length+" คน)\n   เลขที่ "+x.who.map(s=>s.number).join(", ")+(shortName?"":"\n"+x.who.map(s=>"   - "+s.number+" "+s.name).join("\n"))).join("\n\n");
+    else body=late.map(r=>"เลขที่ "+r.s.number+" "+dn(r.s)+" (ค้าง "+r.miss.length+")\n"+r.miss.map(a=>"   - "+a.title).join("\n")).join("\n\n");
+    return head+"\n"+body+"\n\nสรุป: ค้างงาน "+late.length+" คน · ส่งครบ "+(rows.length-late.length)+" คน"+tail();
+  };
+  const textPerson=(r)=>{
+    const head="แจ้งงานค้าง วิชา"+subjLine+"\nถึง เลขที่ "+r.s.number+" "+r.s.name+"\nข้อมูล ณ วันที่ "+today+"\n";
+    if(!r.miss.length) return head+"\nส่งงานครบแล้ว เยี่ยมมาก"+tail();
+    const sc=subjScores[r.s.id]||{};
+    return head+"\nงานที่ยังค้าง "+r.miss.length+" งาน\n"+r.miss.map((a,i)=>(i+1)+". "+a.title+" (เต็ม "+a.max+")"+(pendingNoteOf(sc[a.id])?" ["+pendingNoteOf(sc[a.id])+"]":"")).join("\n")+tail();
+  };
+  const copy=async(text,label)=>{ const ok=await copyText(text); setToast({ok,text:ok?"คัดลอกแล้ว — "+label+" (วางในไลน์ได้เลย)":"คัดลอกไม่สำเร็จ"}); };
+
+  /* ---------- หน้าพิมพ์ ---------- */
+  const headHtml=(title)=>(logoUrl?`<img class="logo" src="${escHtml(logoUrl)}">`:"")+`<h1>${escHtml(title)}</h1><div class="sub">${escHtml(school)}<br>รายวิชา ${escHtml(subjLine)} · ข้อมูล ณ วันที่ ${escHtml(today)}</div>`;
+  const footHtml=()=>`<div class="meta">${due?`<b>กำหนดส่ง</b> ภายใน ${escHtml(fmtDateLong(due))}<br>`:""}${note.trim()?`<b>หมายเหตุ</b> ${escHtml(note.trim())}`:""}</div>`;
+  const signTeacher=`<div>ลงชื่อ ...................................... ครูผู้สอน<br>( ${escHtml(teacher||"......................................")} )</div>`;
+  const printClass=()=>{
+    let t;
+    if(groupBy==="work") t=`<table><thead><tr><th style="width:8%">ที่</th><th>ชื่องาน</th><th style="width:10%">เต็ม</th><th style="width:10%">ค้าง (คน)</th><th style="width:38%">เลขที่ที่ยังไม่ส่ง</th></tr></thead><tbody>${
+      byWork.map((x,i)=>`<tr><td class="c">${i+1}</td><td>${escHtml(x.a.title)}</td><td class="c">${escHtml(x.a.max)}</td><td class="c">${x.who.length}</td><td>${x.who.map(s=>s.number).join(", ")}</td></tr>`).join("")||`<tr><td colspan="5" class="c">ไม่มีงานค้าง</td></tr>`}</tbody></table>`;
+    else t=`<table><thead><tr><th style="width:7%">ที่</th><th style="width:8%">เลขที่</th><th style="width:32%">ชื่อ-สกุล</th><th style="width:9%">จำนวน</th><th>งานที่ยังค้าง</th></tr></thead><tbody>${
+      late.map((r,i)=>`<tr><td class="c">${i+1}</td><td class="c">${r.s.number}</td><td>${escHtml(dn(r.s))}</td><td class="c">${r.miss.length}</td><td>${r.miss.map(a=>escHtml(a.title)).join(", ")}</td></tr>`).join("")||`<tr><td colspan="5" class="c">นักเรียนส่งงานครบทุกคน</td></tr>`}</tbody></table>`;
+    const sum=`<div class="meta">สรุป: นักเรียนทั้งหมด ${rows.length} คน · ค้างงาน <b>${late.length}</b> คน (รวม ${totalMiss} งาน) · ส่งครบ ${rows.length-late.length} คน · งานที่นำมาตรวจ ${chosen.length} งาน</div>`;
+    openPrint("สรุปงานค้าง "+subj.name+" "+subj.room, headHtml("แบบสรุปรายชื่อนักเรียนที่มีงานค้าง")+sum+t+footHtml()+`<div class="sign">${signTeacher}</div>`);
+  };
+  const slipHtml=(r)=>{ const sc=subjScores[r.s.id]||{};
+    return `<div class="slip"><h2>ใบแจ้งงานค้าง</h2><div class="sub small">${escHtml(school)} · รายวิชา ${escHtml(subjLine)} · ณ วันที่ ${escHtml(today)}</div>
+    <div><b>ชื่อ-สกุล</b> ${escHtml(r.s.name)} &nbsp; <b>เลขที่</b> ${r.s.number} &nbsp; <b>ค้าง</b> ${r.miss.length} งาน</div>
+    <table><thead><tr><th style="width:9%">ที่</th><th>งานที่ยังไม่ส่ง / ต้องแก้ไข</th><th style="width:10%">เต็ม</th><th style="width:27%">วันที่ส่ง / ครูตรวจ</th></tr></thead><tbody>${
+      r.miss.map((a,i)=>`<tr><td class="c">${i+1}</td><td>${escHtml(a.title)}${pendingNoteOf(sc[a.id])?` <span class="small">[${escHtml(pendingNoteOf(sc[a.id]))}]</span>`:""}</td><td class="c">${escHtml(a.max)}</td><td></td></tr>`).join("")}</tbody></table>
+    ${footHtml()}<div class="sign small"><div>ลงชื่อ ..............................<br>นักเรียน</div><div>ลงชื่อ ..............................<br>ผู้ปกครอง</div><div>ลงชื่อ ..............................<br>( ${escHtml(teacher||"..............................")} )<br>ครูผู้สอน</div></div></div>`; };
+  const printSlips=(rs)=>{ const list2=rs.filter(r=>r.miss.length);
+    if(!list2.length) return setToast({ok:false,text:"ไม่มีงานค้าง"});
+    openPrint("ใบแจ้งงานค้างรายบุคคล "+subj.name+" "+subj.room+(list2.length>1?" ("+list2.length+" คน)":""), list2.map(slipHtml).join("")); };
+
+  const setModeP=(m)=>{ setMode(m); setLS("mode",m); };
+  const toggle=(id)=>setPicked(p=>{ const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n; });
+  const found=useMemo(()=>{ const base=q.trim()?findStudents(students,q):students; return base.map(s=>rows.find(r=>r.s.id===s.id)).filter(Boolean); },[q,students,rows]);
+  const curRow=cur&&rows.find(r=>r.s.id===cur);
+  const lateIdx=curRow?late.findIndex(r=>r.s.id===cur):-1;
+  const step=(d)=>{ if(!late.length) return; const i=lateIdx<0?0:(lateIdx+d+late.length)%late.length; setCur(late[i].s.id); };
+  const chipStyle=(on)=>({fontSize:12.5,padding:"5px 10px",borderRadius:20,cursor:"pointer",fontFamily:"inherit",fontWeight:600,border:"1px solid "+(on?C.navy:C.border),background:on?C.navy:"#fff",color:on?"#fff":SUB});
+  const miniBtn={display:"flex",alignItems:"center",gap:4,background:C.navySoft,border:"none",borderRadius:7,padding:"6px 9px",cursor:"pointer",color:C.navy,fontFamily:"inherit",fontSize:12.5,fontWeight:600};
+
+  return <div style={{display:"grid",gap:12,gridTemplateColumns:"minmax(0,1fr)"}}>
+    <SectionHead title="สรุปงานค้างแจ้งนักเรียน" right={<div className="seg">
+      <button className={mode==="class"?"on":""} onClick={()=>setModeP("class")}><ClipboardList size={15}/>รวมทั้งห้อง</button>
+      <button className={mode==="person"?"on":""} onClick={()=>setModeP("person")}><Search size={15}/>รายบุคคล</button></div>}/>
+
+    {/* ตั้งค่า */}
+    <div style={panel}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+        <b style={{color:C.navy,fontSize:14.5}}>งานที่นำมาตรวจ ({chosen.length}/{list.length})</b>
+        <button onClick={()=>setPicked(new Set(list.map(a=>a.id)))} style={{...miniBtn,padding:"3px 8px"}}>ทั้งหมด</button>
+        <button onClick={()=>setPicked(new Set())} style={{...miniBtn,padding:"3px 8px"}}>ล้าง</button>
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {list.map(a=><button key={a.id} onClick={()=>toggle(a.id)} style={chipStyle(picked.has(a.id))}>{a.title}</button>)}
+        {!list.length && <span style={{color:SUB,fontSize:13.5}}>ยังไม่มีงานในเมนู “เช็คคะแนน”</span>}
+      </div>
+      <div style={{display:"flex",gap:14,flexWrap:"wrap",marginTop:12,fontSize:13.5,color:C.navy,fontWeight:600}}>
+        <label style={{display:"flex",gap:5,alignItems:"center",cursor:"pointer"}}><input type="checkbox" checked={countZero} onChange={e=>{setCountZero(e.target.checked);setLS("zero",e.target.checked?"1":"0");}}/>นับคะแนน 0 เป็นงานค้าง</label>
+        <label style={{display:"flex",gap:5,alignItems:"center",cursor:"pointer"}} title="เหมาะกับส่งในกลุ่มไลน์ห้อง"><input type="checkbox" checked={shortName} onChange={e=>{setShortName(e.target.checked);setLS("short",e.target.checked?"1":"0");}}/>ไม่แสดงนามสกุล (ข้อความ/สรุปรวม)</label>
+      </div>
+      <details style={{marginTop:10}}>
+        <summary style={{cursor:"pointer",fontSize:13.5,fontWeight:600,color:C.navy}}>กำหนดส่ง · ข้อความถึงนักเรียน · ชื่อครู/โรงเรียน</summary>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:10,marginTop:10}}>
+          <Field label="กำหนดส่ง (ถ้ามี)"><input type="date" style={inputStyle} value={due} onChange={e=>setDue(e.target.value)}/></Field>
+          <Field label="ชื่อครูผู้แจ้ง"><input style={inputStyle} value={teacher} onChange={e=>{setTeacher(e.target.value);setLS("teacher",e.target.value);}}/></Field>
+          <Field label="โรงเรียน (หัวกระดาษ)"><input style={inputStyle} value={school} onChange={e=>{setSchool(e.target.value);setLS("school",e.target.value);}}/></Field>
+        </div>
+        <Field label="ข้อความเพิ่มเติม"><textarea style={{...inputStyle,minHeight:60,resize:"vertical"}} value={note} onChange={e=>{setNote(e.target.value);setLS("note",e.target.value);}}/></Field>
+      </details>
+    </div>
+
+    {/* สรุปตัวเลข */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8}}>
+      {[["ค้างงาน",late.length+" คน","#c0392b","#fbeae8"],["รวมงานค้าง",totalMiss+" งาน",C.accent,C.accentSoft],["ส่งครบ",(rows.length-late.length)+" คน","#2e7d52","#e6f4ec"]].map(([t,v,c,bg])=>
+        <div key={t} style={{background:bg,borderRadius:12,padding:"10px 12px"}}><div style={{fontSize:12.5,color:c,fontWeight:600}}>{t}</div><div style={{fontSize:21,fontWeight:700,color:c}}>{v}</div></div>)}
+    </div>
+
+    {mode==="class" && <div style={panel}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
+        <div className="seg">
+          <button className={groupBy==="student"?"on":""} onClick={()=>{setGroupBy("student");setLS("group","student");}}>เรียงตามนักเรียน</button>
+          <button className={groupBy==="work"?"on":""} onClick={()=>{setGroupBy("work");setLS("group","work");}}>เรียงตามงาน</button>
+        </div>
+        <div style={{marginLeft:"auto",display:"flex",gap:6,flexWrap:"wrap"}}>
+          <Btn variant="primary" size="sm" onClick={()=>copy(textClass(),"สรุปทั้งห้อง")}><Chat size={14}/>คัดลอกส่งไลน์</Btn>
+          <Btn variant="accent" size="sm" onClick={printClass}><Printer size={14}/>พิมพ์/PDF สรุปรวม</Btn>
+          <Btn variant="ghost" size="sm" onClick={()=>printSlips(rows)}><Printer size={14}/>ใบแจ้งรายบุคคลทุกคน</Btn>
+        </div>
+      </div>
+      {groupBy==="student" ? <div style={{...tableWrap,overflow:"hidden"}}>
+        {late.map(r=><div key={r.s.id} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 12px",borderTop:"1px solid "+C.border}}>
+          <div className="qs-no">{r.s.number}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:600}}>{r.s.name} <span style={{fontSize:12,color:"#c0392b",fontWeight:700}}>ค้าง {r.miss.length}</span></div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4}}>{r.miss.map(a=><span key={a.id} style={{fontSize:12,background:"#fbeae8",color:"#a5352a",padding:"2px 8px",borderRadius:12}}>{a.title}</span>)}</div>
+          </div>
+          <div style={{display:"flex",gap:4,flexShrink:0}}>
+            <button style={miniBtn} title="คัดลอกข้อความรายบุคคล" onClick={()=>copy(textPerson(r),r.s.name)}><Copy size={13}/></button>
+            <button style={miniBtn} title="พิมพ์ใบแจ้งรายบุคคล" onClick={()=>printSlips([r])}><Printer size={13}/></button>
+          </div>
+        </div>)}
+        {!late.length && <div style={{padding:26,textAlign:"center",color:"#2e7d52",fontWeight:600}}>นักเรียนส่งงานครบทุกคน</div>}
+      </div> : <div style={{display:"grid",gap:8}}>
+        {byWork.map(x=><div key={x.a.id} style={{border:"1px solid "+C.border,borderRadius:10,padding:"10px 12px"}}>
+          <div style={{fontWeight:700,color:C.navy}}>{x.a.title} <span style={{fontSize:12,color:SUB,fontWeight:500}}>เต็ม {x.a.max}</span> <span style={{fontSize:12,color:"#c0392b"}}>ค้าง {x.who.length} คน</span></div>
+          <div style={{fontSize:13.5,color:C.text,marginTop:4}}>เลขที่ {x.who.map(s=>s.number).join(", ")}</div>
+        </div>)}
+        {!byWork.length && <div style={{padding:20,textAlign:"center",color:"#2e7d52",fontWeight:600}}>ไม่มีงานค้าง</div>}
+      </div>}
+      <details style={{marginTop:12}}><summary style={{cursor:"pointer",fontSize:13.5,fontWeight:600,color:C.navy}}>ดูตัวอย่างข้อความที่จะคัดลอก</summary>
+        <pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",fontSize:13.5,background:"#f7f9fb",border:"1px solid "+C.border,borderRadius:8,padding:12,marginTop:8}}>{textClass()}</pre></details>
+    </div>}
+
+    {mode==="person" && <div style={{display:"grid",gap:12,gridTemplateColumns:"minmax(0,1fr)"}}>
+      {curRow && <div className="qs-panel" style={{marginBottom:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <div className="qs-no" style={{background:curRow.miss.length?"#c0392b":"#2e7d52",color:"#fff"}}>{curRow.s.number}</div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:16,color:C.navy}}>{curRow.s.name}</div>
+            <div style={{fontSize:12.5,color:curRow.miss.length?"#c0392b":"#2e7d52",fontWeight:600}}>{curRow.miss.length?"ค้าง "+curRow.miss.length+" งาน":"ส่งครบแล้ว"}</div></div>
+          <button className="qs-iconbtn" onClick={()=>setCur(null)}><X size={18}/></button>
+        </div>
+        <pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",fontSize:14,background:"#f7f9fb",border:"1px solid "+C.border,borderRadius:8,padding:12,margin:"0 0 10px"}}>{textPerson(curRow)}</pre>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <Btn variant="primary" size="sm" onClick={()=>copy(textPerson(curRow),curRow.s.name)}><Chat size={14}/>คัดลอกส่งไลน์</Btn>
+          <Btn variant="accent" size="sm" disabled={!curRow.miss.length} onClick={()=>printSlips([curRow])}><Printer size={14}/>พิมพ์/PDF ใบแจ้ง</Btn>
+          <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+            <Btn variant="ghost" size="sm" disabled={!late.length} onClick={()=>step(-1)}><ChevronLeft size={14}/>คนก่อน</Btn>
+            <Btn variant="ghost" size="sm" disabled={!late.length} onClick={()=>step(1)}>คนถัดไปที่ค้าง<span style={{display:"flex",transform:"rotate(180deg)"}}><ChevronLeft size={14}/></span></Btn>
+          </div>
+        </div>
+      </div>}
+      <div className="qs-search" style={{borderWidth:1}}>
+        <Search size={18}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นเลขที่ หรือชื่อนักเรียน" autoComplete="off"
+          onKeyDown={e=>{ if(e.key==="Enter"&&found[0]){ setCur(found[0].s.id); setQ(""); } }}/>
+        {q && <button className="qs-iconbtn" style={{background:"transparent"}} onClick={()=>setQ("")}><X size={18}/></button>}
+      </div>
+      <div style={{...tableWrap,overflow:"hidden"}}>
+        {found.map(r=><button key={r.s.id} className="qs-row" onClick={()=>{setCur(r.s.id);window.scrollTo({top:0,behavior:"smooth"});}} style={r.s.id===cur?{background:C.accentSoft}:null}>
+          <div className="qs-no">{r.s.number}</div>
+          <div style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.s.name}</div>
+          <div className="qs-score" style={r.miss.length?{background:"#fbeae8",color:"#c0392b"}:{background:"#e6f4ec",color:"#2e7d52"}}>{r.miss.length?"ค้าง "+r.miss.length:"ครบ"}</div>
+        </button>)}
+        {!found.length && <div style={{padding:22,textAlign:"center",color:SUB}}>ไม่พบนักเรียน</div>}
+      </div>
+    </div>}
+
+    {toast && <div className="qs-toast" style={{background:toast.ok?"#2e7d52":"#c0392b"}}>{toast.text}</div>}
   </div>;
 }
 
