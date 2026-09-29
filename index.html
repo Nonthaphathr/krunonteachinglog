@@ -51,6 +51,8 @@
   .qs-no{ width:34px; height:34px; border-radius:50%; background:#eef2f7; color:#1f3a5f; font-weight:700; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
   .qs-score{ min-width:48px; text-align:center; padding:5px 10px; border-radius:20px; font-weight:700; font-size:14.5px; }
   .qs-panel{ background:#fff; border:2px solid #c2703d; border-radius:14px; padding:14px; margin-bottom:12px; }
+  .qs-overlay{ position:fixed; inset:0; z-index:70; background:rgba(15,25,40,.5); display:flex; align-items:flex-start; justify-content:center; padding:12px; padding-top:max(12px,6vh); overflow-y:auto; }
+  .qs-modal{ width:100%; max-width:440px; margin:0; box-shadow:0 12px 40px rgba(0,0,0,.3); }
   .qs-big{ width:100%; font-family:inherit; font-size:30px; font-weight:700; text-align:center; padding:8px; border:1px solid #dde3ea; border-radius:10px; outline:none; color:#1f3a5f; }
   .qs-big:focus{ border-color:#1f3a5f; box-shadow:0 0 0 3px #eef2f7; }
   .qs-pad{ display:grid; grid-template-columns:repeat(auto-fill,minmax(48px,1fr)); gap:6px; margin-top:10px; }
@@ -733,7 +735,7 @@ function QuickScore({students,list,subjScores,setScore,onAddAssignment}){
     </div>
 
     {/* 3) แผงกรอกคะแนนของคนที่เลือก */}
-    {selStu && <div className="qs-panel">
+    {selStu && <div className="qs-overlay" onMouseDown={e=>{ if(e.target===e.currentTarget){ setSel(null); focusSearch(); } }}><div className="qs-panel qs-modal">
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
         <div className="qs-no" style={{background:C.accent,color:"#fff"}}>{selStu.number}</div>
         <div style={{flex:1,minWidth:0}}>
@@ -748,7 +750,7 @@ function QuickScore({students,list,subjScores,setScore,onAddAssignment}){
       </div>
       {pad && <div className="qs-pad">{pad.map(n=><button key={n} className={String(val)===String(n)?"on":""} onClick={()=>{ if(commit(sel,n)) afterCommit(sel); }}>{n}</button>)}</div>}
       {curOf(selStu.id)!=null && <button onClick={()=>{ if(commit(sel,"")) afterCommit(sel); }} style={{marginTop:10,background:"none",border:"none",color:"#c0392b",fontFamily:"inherit",fontSize:13,fontWeight:600,cursor:"pointer",padding:0}}>ลบคะแนนของคนนี้</button>}
-    </div>}
+    </div></div>}
 
     {/* 4) รายชื่อที่ค้นพบ */}
     <div ref={listRef} style={{...tableWrap,overflow:"hidden"}}>
