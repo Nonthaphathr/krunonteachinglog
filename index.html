@@ -201,7 +201,7 @@ const usePersist = () => useContext(PersistCtx);
 function makePersist(){
   if(!FB){ // โหมดหน่วยความจำ: ทุกฟังก์ชันเป็น no-op
     const noop = async()=>{};
-    return { addSubject:noop,updateSubject:noop,deleteSubject:noop,replaceStudents:noop,
+    return { addSubject:noop,updateSubject:noop,deleteSubject:noop,replaceStudents:noop,setStudentStatus:noop,
       deleteStudent:noop,setAttendanceDay:noop,addAssignment:noop,updateAssignment:noop,
       deleteAssignment:noop,setScoreDoc:noop,addNote:noop,updateNote:noop,deleteNote:noop,setLogo:noop,setQinfo:noop };
   }
@@ -216,8 +216,9 @@ function makePersist(){
     deleteSubject:async(id)=>{ await col("subjects").doc(id).delete();
       await Promise.all(["students","assignments","notes","attendance","scores","qinfo"].map(n=>deleteWhere(n,id))); },
     replaceStudents:async(subjId,list)=>{ await deleteWhere("students",subjId);
-      const batch=db.batch(); list.forEach(s=>batch.set(col("students").doc(s.id),{subjectId:subjId,number:s.number,name:s.name})); await batch.commit(); },
+      const batch=db.batch(); list.forEach(s=>batch.set(col("students").doc(s.id),{subjectId:subjId,number:s.number,name:s.name,status:s.status||"normal"})); await batch.commit(); },
     deleteStudent:(id)=>col("students").doc(id).delete(),
+    setStudentStatus:(id,status)=>col("students").doc(id).set({status},{merge:true}),
     setAttendanceDay:(subjId,date,marks)=>col("attendance").doc(subjId+"_"+date).set({subjectId:subjId,date,marks}),
     addAssignment:(subjId,a)=>col("assignments").doc(a.id).set({subjectId:subjId,title:a.title,max:a.max,order:a.order}),
     updateAssignment:(id,a)=>col("assignments").doc(id).set({title:a.title,max:a.max},{merge:true}),
@@ -257,6 +258,10 @@ function Modal({open,onClose,title,children,width=460}){
 }
 function Field({label,children}){ return <label style={{display:"block",marginBottom:14}}>
   <span style={{display:"block",fontSize:13,fontWeight:600,color:SUB,marginBottom:6}}>{label}</span>{children}</label>; }
+/* สถานะนักเรียน: ไม่มีค่า/normal = ปกติ */
+const STU_STATUS=[{v:"normal",label:"ปกติ",color:"#2e7d52",bg:"#e6f4ec"},{v:"suspended",label:"แขวนลอย",color:"#b7791f",bg:"#fdf3dc"},{v:"moved",label:"ย้าย",color:"#2b6cb0",bg:"#e5eefa"},{v:"left",label:"ลาออก",color:"#c0392b",bg:"#fbeae8"}];
+const stuStatusOf=(s)=>STU_STATUS.find(x=>x.v===(s&&s.status))||STU_STATUS[0];
+const isNormalStu=(s)=>!s||!s.status||s.status==="normal";
 const inputStyle={width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:8,border:"1px solid "+C.border,fontSize:14.5,fontFamily:"inherit",color:C.text,outline:"none",background:"#fff"};
 const tableWrap={background:"#fff",border:"1px solid "+C.border,borderRadius:12,overflow:"auto"};
 const tableStyle={width:"100%",borderCollapse:"collapse",fontSize:14.5};
@@ -351,7 +356,7 @@ function App(){
       {view==="attendance" && subj && <AttendanceView subj={subj} students={students[subj.id]||[]} attendance={attendance} setAttendance={setAttendance}/>}
       {view==="scores" && subj && <ScoresView subj={subj} setView={setView} students={students[subj.id]||[]} assignments={assignments} setAssignments={setAssignments} scores={scores} setScores={setScores}/>}
       {view==="notes" && subj && <NotesView subj={subj} notes={notes} setNotes={setNotes}/>}
-      {view==="pending" && subj && <PendingView subj={subj} students={students[subj.id]||[]} assignments={assignments} scores={scores} logoUrl={logoUrl}/>}
+      {view==="pending" && subj && <PendingView subj={subj} students={(students[subj.id]||[]).filter(isNormalStu)} assignments={assignments} scores={scores} logoUrl={logoUrl}/>}
       {view==="qinfo" && subj && <QinfoView subj={subj} students={students[subj.id]||[]} assignments={assignments} scores={scores} qinfo={qinfo} setQinfo={setQinfo}/>}
       {view==="settings" && <SettingsView subjects={subjects} students={students} setStudents={setStudents} logoUrl={logoUrl} setLogoUrl={setLogoUrl}/>}
     </main>
@@ -1436,6 +1441,7 @@ function SettingsView({subjects,students,setStudents,logoUrl,setLogoUrl}){
       else alert("ไม่พบข้อมูลในไฟล์"); };
     reader.readAsArrayBuffer(file); e.target.value=""; };
   const currentList=students[target]||[];
+  const setStuStatus=(id,status)=>{ setStudents(p=>({...p,[target]:(p[target]||[]).map(s=>s.id===id?{...s,status}:s)})); persist.setStudentStatus(id,status); };
   const removeStudent=(id)=>{ setStudents(p=>({...p,[target]:(p[target]||[]).filter(s=>s.id!==id)})); persist.deleteStudent(id); };
   return <div style={{display:"grid",gap:14}}>
     <h2 style={{margin:0,fontSize:19,color:C.navy}}>ตั้งค่าระบบ</h2>
@@ -1453,11 +1459,12 @@ function SettingsView({subjects,students,setStudents,logoUrl,setLogoUrl}){
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={importFile} style={{display:"none"}}/>
       </div>
       {currentList.length>0 && <div style={{marginTop:14}}>
-        <div style={{fontSize:13,fontWeight:600,color:SUB,marginBottom:6}}>รายชื่อปัจจุบัน ({currentList.length} คน)</div>
+        <div style={{fontSize:13,fontWeight:600,color:SUB,marginBottom:6}}>รายชื่อปัจจุบัน ({currentList.length} คน · สถานะปกติ {currentList.filter(isNormalStu).length} คน)</div>
         <div style={{...tableWrap,maxHeight:240}}><table style={tableStyle}>
-          <thead><tr><th style={{...th,width:44}}>#</th><th style={{...th,textAlign:"left"}}>ชื่อ-สกุล</th><th style={{...th,width:56}}></th></tr></thead>
+          <thead><tr><th style={{...th,width:44}}>#</th><th style={{...th,textAlign:"left"}}>ชื่อ-สกุล</th><th style={{...th,width:118}}>สถานะ</th><th style={{...th,width:56}}></th></tr></thead>
           <tbody>{currentList.map(s=><tr key={s.id} className="tl-row">
-            <td style={{...td,textAlign:"center",color:SUB}}>{s.number}</td><td style={td}>{s.name}</td>
+            <td style={{...td,textAlign:"center",color:SUB}}>{s.number}</td><td style={{...td,opacity:isNormalStu(s)?1:.55}}>{s.name}</td>
+            <td style={{...td,textAlign:"center",padding:"6px 8px"}}><select value={s.status||"normal"} onChange={e=>setStuStatus(s.id,e.target.value)} style={{fontFamily:"inherit",fontSize:13.5,fontWeight:600,padding:"5px 6px",borderRadius:8,border:"1px solid "+C.border,color:stuStatusOf(s).color,background:stuStatusOf(s).bg,cursor:"pointer"}}>{STU_STATUS.map(o=><option key={o.v} value={o.v}>{o.label}</option>)}</select></td>
             <td style={{...td,textAlign:"center"}}><button onClick={()=>removeStudent(s.id)} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer"}}><Trash2 size={15}/></button></td>
           </tr>)}</tbody>
         </table></div>
