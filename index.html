@@ -11,7 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
 <!-- Firebase (gstatic official) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
@@ -52,6 +52,8 @@
   .qs-score{ min-width:48px; text-align:center; padding:5px 10px; border-radius:20px; font-weight:700; font-size:14.5px; }
   .qs-panel{ background:#fff; border:2px solid #c2703d; border-radius:14px; padding:14px; margin-bottom:12px; }
   .qs-overlay{ position:fixed; inset:0; z-index:70; background:rgba(15,25,40,.5); display:flex; align-items:flex-start; justify-content:center; padding:12px; padding-top:max(12px,6vh); overflow-y:auto; }
+  .qs-warn{ border:1.5px solid; border-radius:10px; padding:8px 10px; margin-bottom:10px; font-size:13.5px; font-weight:600; line-height:1.4; }
+  .qs-badge{ padding:3px 9px; border-radius:20px; font-size:12px; font-weight:700; flex-shrink:0; }
   .qs-modal{ width:100%; max-width:440px; margin:0; box-shadow:0 12px 40px rgba(0,0,0,.3); }
   .qs-big{ width:100%; font-family:inherit; font-size:30px; font-weight:700; text-align:center; padding:8px; border:1px solid #dde3ea; border-radius:10px; outline:none; color:#1f3a5f; }
   .qs-big:focus{ border-color:#1f3a5f; box-shadow:0 0 0 3px #eef2f7; }
@@ -262,6 +264,11 @@ function Field({label,children}){ return <label style={{display:"block",marginBo
 const STU_STATUS=[{v:"normal",label:"ปกติ",color:"#2e7d52",bg:"#e6f4ec"},{v:"suspended",label:"แขวนลอย",color:"#b7791f",bg:"#fdf3dc"},{v:"moved",label:"ย้าย",color:"#2b6cb0",bg:"#e5eefa"},{v:"left",label:"ลาออก",color:"#c0392b",bg:"#fbeae8"}];
 const stuStatusOf=(s)=>STU_STATUS.find(x=>x.v===(s&&s.status))||STU_STATUS[0];
 const isNormalStu=(s)=>!s||!s.status||s.status==="normal";
+const STU_XL={suspended:{fill:"FFF3DC",font:"B7791F"},moved:{fill:"E5EEFA",font:"2B6CB0"},left:{fill:"FBEAE8",font:"C0392B"}};
+/* ใส่สีไฮไลท์แถวนักเรียนสถานะไม่ปกติใน Excel (แถวข้อมูลเริ่มที่แถว 2) */
+function markStatusRows(ws,studs,ncol){ studs.forEach((s,i)=>{ if(isNormalStu(s)) return; const c0=STU_XL[s.status]||STU_XL.left;
+  for(let c=0;c<ncol;c++){ const ref=XLSX.utils.encode_cell({r:i+1,c}); if(!ws[ref]) ws[ref]={t:"s",v:""};
+    ws[ref].s={fill:{patternType:"solid",fgColor:{rgb:c0.fill}},font:{color:{rgb:c0.font},bold:c===ncol-1}}; } }); }
 const inputStyle={width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:8,border:"1px solid "+C.border,fontSize:14.5,fontFamily:"inherit",color:C.text,outline:"none",background:"#fff"};
 const tableWrap={background:"#fff",border:"1px solid "+C.border,borderRadius:12,overflow:"auto"};
 const tableStyle={width:"100%",borderCollapse:"collapse",fontSize:14.5};
@@ -457,10 +464,11 @@ function AttendanceView({subj,students,attendance,setAttendance}){
     Object.values(dayData).forEach(v=>{ if(c[v]!=null) c[v]++; }); return c; },[dayData]);
   const exportXlsx=()=>{
     const subjA=attendance[subj.id]||{}; const dates=Object.keys(subjA).sort();
-    const header=["เลขที่","ชื่อ-สกุล",...dates.map(fmtDate)];
-    const rows=students.map(s=>[s.number,s.name,...dates.map(d=>(subjA[d]&&subjA[d][s.id])?STATUS[subjA[d][s.id]].label:"")]);
+    const header=["เลขที่","ชื่อ-สกุล",...dates.map(fmtDate),"สถานะนักเรียน"];
+    const rows=students.map(s=>[s.number,s.name,...dates.map(d=>(subjA[d]&&subjA[d][s.id])?STATUS[subjA[d][s.id]].label:""),stuStatusOf(s).label]);
     const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
-    ws["!cols"]=[{wch:7},{wch:26},...dates.map(()=>({wch:10}))];
+    ws["!cols"]=[{wch:7},{wch:26},...dates.map(()=>({wch:10})),{wch:14}];
+    markStatusRows(ws,students,header.length);
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"เช็คชื่อ");
     XLSX.writeFile(wb,"เช็คชื่อ_"+subj.name+"_"+subj.room+".xlsx");
   };
@@ -531,10 +539,11 @@ function ScoresView({subj,setView,students,assignments,setAssignments,scores,set
     else alert("ไม่พบค่าที่ต้องแปลง (ทุกช่องเป็นตัวเลขอยู่แล้ว)");
   };
   const exportXlsx=()=>{
-    const header=["เลขที่","ชื่อ-สกุล",...list.map(a=>a.title+" ("+a.max+")"),"รวม ("+totalMax+")"];
-    const rows=students.map(s=>[s.number,s.name,...list.map(a=>(subjScores[s.id]&&subjScores[s.id][a.id])!=null?subjScores[s.id][a.id]:""),rowTotal(s.id)]);
+    const header=["เลขที่","ชื่อ-สกุล",...list.map(a=>a.title+" ("+a.max+")"),"รวม ("+totalMax+")","สถานะนักเรียน"];
+    const rows=students.map(s=>[s.number,s.name,...list.map(a=>(subjScores[s.id]&&subjScores[s.id][a.id])!=null?subjScores[s.id][a.id]:""),rowTotal(s.id),stuStatusOf(s).label]);
     const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
-    ws["!cols"]=[{wch:7},{wch:26},...list.map(()=>({wch:14})),{wch:10}];
+    ws["!cols"]=[{wch:7},{wch:26},...list.map(()=>({wch:14})),{wch:10},{wch:14}];
+    markStatusRows(ws,students,header.length);
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"คะแนน");
     XLSX.writeFile(wb,"คะแนน_"+subj.name+"_"+subj.room+".xlsx");
   };
@@ -575,10 +584,10 @@ function ScoresView({subj,setView,students,assignments,setAssignments,scores,set
       <tbody>
         {tableStudents.map(s=><tr key={s.id} className="tl-row">
           <td style={{...td,textAlign:"center",color:SUB}}>{s.number}</td>
-          <td style={{...td,position:"sticky",left:0,background:"inherit",fontWeight:500}}>{s.name}</td>
+          <td style={{...td,position:"sticky",left:0,background:isNormalStu(s)?"inherit":stuStatusOf(s).bg,fontWeight:500}}>{s.name}{!isNormalStu(s) && <span className="qs-badge" style={{marginLeft:6,background:"#fff",color:stuStatusOf(s).color,border:"1px solid "+stuStatusOf(s).color}}>{stuStatusOf(s).label}</span>}</td>
           {list.map(a=><td key={a.id} style={{...td,padding:4,textAlign:"center"}}>
             <input type="text" inputMode="decimal" value={(subjScores[s.id]&&subjScores[s.id][a.id])!=null?subjScores[s.id][a.id]:""} onChange={e=>setScore(s.id,a.id,e.target.value)}
-              style={{width:72,textAlign:"center",padding:"7px 4px",border:"1px solid "+C.border,borderRadius:6,fontFamily:"inherit",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+              title={isNormalStu(s)?undefined:"⚠ นักเรียนสถานะ "+stuStatusOf(s).label+" — ไม่ใช่สถานะปกติ"} style={{width:72,textAlign:"center",padding:"7px 4px",border:isNormalStu(s)?"1px solid "+C.border:"2px solid "+stuStatusOf(s).color,background:isNormalStu(s)?"#fff":stuStatusOf(s).bg,borderRadius:6,fontFamily:"inherit",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
           </td>)}
           <td style={{...td,textAlign:"center",fontWeight:700,color:C.accent,background:C.accentSoft}}>{rowTotal(s.id)}</td>
         </tr>)}
@@ -640,7 +649,7 @@ function QuickScore({students,list,subjScores,setScore,onAddAssignment}){
   const done=asg?countDone(aid):0;
   const parsed=useMemo(()=>parseQuick(q),[q]);
   const matches=useMemo(()=>{
-    if(!parsed.query) return onlyEmpty?students.filter(s=>curOf(s.id)==null):students;
+    if(!parsed.query) return onlyEmpty?students.filter(s=>curOf(s.id)==null&&isNormalStu(s)):students;
     return findStudents(students,parsed.query);
   },[students,parsed.query,onlyEmpty,subjScores,aid]);
   useEffect(()=>setHi(0),[parsed.query,onlyEmpty]);
@@ -668,7 +677,7 @@ function QuickScore({students,list,subjScores,setScore,onAddAssignment}){
     return true;
   };
   const nextEmpty=(afterSid)=>{ const idx=students.findIndex(s=>s.id===afterSid);
-    for(let k=1;k<students.length;k++){ const s=students[(idx+k)%students.length]; if(s.id!==afterSid && curOf(s.id)==null) return s; } return null; };
+    for(let k=1;k<students.length;k++){ const s=students[(idx+k)%students.length]; if(s.id!==afterSid && curOf(s.id)==null && isNormalStu(s)) return s; } return null; };
   const afterCommit=(sid)=>{
     setQ("");
     if(autoNext){ const n=nextEmpty(sid); if(n){ pick(n); return; } setMsg({ok:true,text:"กรอกครบทุกคนแล้ว"}); }
@@ -677,6 +686,7 @@ function QuickScore({students,list,subjScores,setScore,onAddAssignment}){
   // Enter ในช่องค้นหา: "เลขที่/ชื่อ + คะแนน" และเจอคนเดียว → บันทึกทันที, ไม่งั้นเลือกคนที่ไฮไลต์
   const handleText=(text,hiIdx=0)=>{
     const p=parseQuick(text); const m=p.query?findStudents(students,p.query):matches;
+    if(p.score!=null && m.length===1 && !isNormalStu(m[0])){ pick(m[0]); setVal(String(p.score)); setMsg({ok:false,text:"⚠ "+m[0].name+" สถานะ "+stuStatusOf(m[0]).label+" — ตรวจสอบก่อนบันทึก"}); return; }
     if(p.score!=null && m.length===1){ if(commit(m[0].id,p.score)){ setQ(""); focusSearch(); } return; }
     if(p.score!=null && m.length>1){ setMsg({ok:false,text:"พบ "+m.length+" คน — พิมพ์ชื่อให้ชัดขึ้น หรือใช้เลขที่"}); return; }
     if(m.length>0) pick(m[Math.min(hiIdx,m.length-1)]);
@@ -749,6 +759,7 @@ function QuickScore({students,list,subjScores,setScore,onAddAssignment}){
         </div>
         <button className="qs-iconbtn" onClick={()=>{setSel(null);focusSearch();}} title="ปิด (Esc)"><X size={18}/></button>
       </div>
+      {!isNormalStu(selStu) && <div className="qs-warn" style={{background:stuStatusOf(selStu).bg,color:stuStatusOf(selStu).color,borderColor:stuStatusOf(selStu).color}}>⚠ นักเรียนคนนี้สถานะ “{stuStatusOf(selStu).label}” — ไม่ใช่สถานะปกติ โปรดตรวจสอบก่อนกรอกคะแนน</div>}
       <div style={{display:"flex",gap:8}}>
         <input ref={valRef} className="qs-big" type="text" inputMode="decimal" enterKeyHint="done" value={val} onChange={e=>setVal(e.target.value)} onKeyDown={onValKey} placeholder="คะแนน"/>
         <Btn variant="accent" onClick={()=>{ if(commit(sel,val)) afterCommit(sel); }} style={{padding:"0 18px",fontSize:16}}><Save size={18}/>บันทึก</Btn>
@@ -761,7 +772,8 @@ function QuickScore({students,list,subjScores,setScore,onAddAssignment}){
     <div ref={listRef} style={{...tableWrap,overflow:"hidden"}}>
       {matches.map((s,i)=>{ const v=curOf(s.id); return <button key={s.id} className={"qs-row"+(i===hi&&!sel?" hi":"")} onClick={()=>pick(s)} style={s.id===sel?{background:C.accentSoft}:null}>
         <div className="qs-no">{s.number}</div>
-        <div style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+        <div style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",opacity:isNormalStu(s)?1:.7}}>{s.name}</div>
+        {!isNormalStu(s) && <span className="qs-badge" style={{background:stuStatusOf(s).bg,color:stuStatusOf(s).color}}>{stuStatusOf(s).label}</span>}
         <div className="qs-score" style={v!=null?{background:"#e6f4ec",color:"#2e7d52"}:{background:"#f1f4f8",color:"#a0aab5"}}>{v!=null?v:"–"}</div>
       </button>; })}
       {matches.length===0 && <div style={{padding:24,textAlign:"center",color:SUB,fontSize:14}}>{onlyEmpty&&!parsed.query?"กรอกครบทุกคนแล้ว":"ไม่พบนักเรียนที่ค้นหา"}</div>}
@@ -1267,9 +1279,10 @@ function QinfoView({subj,students,assignments,scores,qinfo,setQinfo}){
 
   const exportXlsx=()=>{
     const B=res.buckets; const dec=Number(cfg.dec)||0;
-    const h1=["เลขที่","ชื่อ-สกุล",...B.filter(b=>b.i).map(b=>b.label+" ("+b.max+")"),"รวมเก็บ ("+res.keepMax+")","กลางภาค ("+(cfg.mid||0)+")","ปลายภาค ("+(cfg.fin||0)+")","รวม ("+res.fullMax+")","เกรด"];
-    const rows=res.rows.map(r=>[r.s.number,r.s.name,...B.filter(b=>b.i).map(b=>r.vals[b.key]==null?"":r.vals[b.key]),r.keep,r.vals.mid==null?"":r.vals.mid,r.vals.fin==null?"":r.vals.fin,r.total,r.grade]);
+    const h1=["เลขที่","ชื่อ-สกุล",...B.filter(b=>b.i).map(b=>b.label+" ("+b.max+")"),"รวมเก็บ ("+res.keepMax+")","กลางภาค ("+(cfg.mid||0)+")","ปลายภาค ("+(cfg.fin||0)+")","รวม ("+res.fullMax+")","เกรด","สถานะนักเรียน"];
+    const rows=res.rows.map(r=>[r.s.number,r.s.name,...B.filter(b=>b.i).map(b=>r.vals[b.key]==null?"":r.vals[b.key]),r.keep,r.vals.mid==null?"":r.vals.mid,r.vals.fin==null?"":r.vals.fin,r.total,r.grade,stuStatusOf(r.s).label]);
     const ws=XLSX.utils.aoa_to_sheet([h1,...rows]); ws["!cols"]=[{wch:7},{wch:26},...h1.slice(2).map(()=>({wch:13}))];
+    markStatusRows(ws,res.rows.map(r=>r.s),h1.length);
     const m1=[["งานในระบบ","คะแนนเต็ม","เทียบกับ (Q-Info)","คะแนนเต็มใน Q-Info","ตัวคูณแปลง"]];
     list.forEach(a=>{ const v=map[a.id]; const b=B.find(b=>(b.i&&(v==="i:"+b.key||v==="u:"+b.i.u))||b.key===v);
       m1.push([a.title,a.max,v===undefined?"(ยังไม่เทียบ)":v===""?"ไม่นำไปคิด":v.startsWith("u:")?"ทั้งหน่วย "+v.slice(2):b?b.label:"",b?b.max:"",b&&b.factor?roundTo(b.factor,4):""]); });
