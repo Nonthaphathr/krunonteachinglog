@@ -206,7 +206,7 @@ function makePersist(){
     return { addSubject:noop,updateSubject:noop,deleteSubject:noop,replaceStudents:noop,setStudentStatus:noop,
       deleteStudent:noop,setAttendanceDay:noop,addAssignment:noop,updateAssignment:noop,
       deleteAssignment:noop,setScoreDoc:noop,addNote:noop,updateNote:noop,deleteNote:noop,setLogo:noop,setQinfo:noop,
-      setFixes:noop,updateFixes:noop,deleteFixes:noop };
+      setFixes:noop,updateFixes:noop,deleteFixes:noop,setTaskPresets:noop };
   }
   const col = (n)=>db.collection(n);
   const writeChunks = async(items,fn)=>{ for(let i=0;i<items.length;i+=400){ const b=db.batch(); items.slice(i,i+400).forEach(it=>fn(b,it)); await b.commit(); } };
@@ -237,6 +237,7 @@ function makePersist(){
     setFixes:(list)=>writeChunks(list,(b,f)=>{ const {id,...d}=f; b.set(col("fixes").doc(id),d,{merge:true}); }),
     updateFixes:(ids,patch)=>writeChunks(ids,(b,id)=>b.set(col("fixes").doc(id),patch,{merge:true})),
     deleteFixes:(ids)=>writeChunks(ids,(b,id)=>b.delete(col("fixes").doc(id))),
+    setTaskPresets:(list)=>col("settings").doc("fixTasks").set({list}),
   };
 }
 
@@ -299,6 +300,7 @@ function App(){
   const [logoUrl,setLogoUrl]=useState("");
   const [qinfo,setQinfo]=useState({});
   const [fixes,setFixes]=useState([]);
+  const [taskPresets,setTaskPresets]=useState([]);
   const [loading,setLoading]=useState(true);
   const [view,setView]=useState("home");
   const [activeSubj,setActiveSubj]=useState(null);
@@ -338,6 +340,8 @@ function App(){
         // งานแก้ 0 ร มส (แยกโหลด — ถ้า Rules ยังไม่อนุญาตจะไม่กระทบข้อมูลส่วนอื่น)
         try{ const fx=await db.collection("fixes").get(); if(alive) setFixes(fx.docs.map(d=>({id:d.id,...d.data()}))); }
         catch(e){ console.warn("โหลด fixes ไม่ได้",e); }
+        try{ const tp=await db.collection("settings").doc("fixTasks").get(); if(alive&&tp.exists) setTaskPresets(tp.data().list||[]); }
+        catch(e){ console.warn("โหลดข้อความภาระงานสำเร็จรูปไม่ได้",e); }
       }catch(e){ console.error("โหลดข้อมูลล้มเหลว:",e); }
       if(alive) setLoading(false);
     }
@@ -369,7 +373,7 @@ function App(){
     {!FB && <div style={{background:"#fbf4e0",color:"#8a6d1b",fontSize:13,textAlign:"center",padding:"7px 12px"}}>โหมดทดลอง (ยังไม่ได้ต่อ Firestore) — ข้อมูลจะไม่ถูกบันทึก เมื่อ deploy บน GitHub Pages จะบันทึกอัตโนมัติ</div>}
     <main style={{maxWidth:920,margin:"0 auto",padding:16,paddingBottom:60}}>
       {view==="home" && <HomeView subjects={subjects} setSubjects={setSubjects} openSubject={openSubject} students={students} setStudents={setStudents} fixes={fixes} openFix={()=>setView("fix")}/>}
-      {view==="fix" && <FixView fixes={fixes} setFixes={setFixes}/>}
+      {view==="fix" && <FixView fixes={fixes} setFixes={setFixes} taskPresets={taskPresets} setTaskPresets={setTaskPresets}/>}
       {view==="class" && subj && <ClassView subj={subj} setView={setView} students={students[subj.id]||[]}/>}
       {view==="attendance" && subj && <AttendanceView subj={subj} students={students[subj.id]||[]} attendance={attendance} setAttendance={setAttendance}/>}
       {view==="scores" && subj && <ScoresView subj={subj} setView={setView} students={students[subj.id]||[]} assignments={assignments} setAssignments={setAssignments} scores={scores} setScores={setScores}/>}
@@ -1504,7 +1508,7 @@ function parseFixWorkbook(wb){
   return {items:[...map.values()],skipped};
 }
 
-function FixView({fixes,setFixes}){
+function FixView({fixes,setFixes,taskPresets,setTaskPresets}){
   const persist=usePersist();
   const [f,setF]=useState({q:"",subject:"",grade:"",status:"",overdue:false});
   const [sel,setSel]=useState({});
@@ -1516,6 +1520,14 @@ function FixView({fixes,setFixes}){
 
   const save=async(promise)=>{ try{ await promise; }
     catch(e){ console.error(e); alert("บันทึกลงฐานข้อมูลไม่สำเร็จ: "+(e.message||e)+"\n(ตรวจสอบ Firestore Rules ว่าอนุญาตคอลเลกชัน fixes)"); } };
+  /* จำข้อความภาระงานที่เคยกรอก (ล่าสุดอยู่หน้าสุด สูงสุด 40 รายการ) */
+  const remember=(t)=>{ t=(t||"").trim(); if(!t) return; const next=[t,...taskPresets.filter(x=>x!==t)].slice(0,40); setTaskPresets(next); save(persist.setTaskPresets(next)); };
+  const forget=(t)=>{ const next=taskPresets.filter(x=>x!==t); setTaskPresets(next); save(persist.setTaskPresets(next)); };
+  const presetBox=(onPick)=>taskPresets.length>0 && <div style={{marginTop:-6,marginBottom:14}}>
+    <div style={{fontSize:12.5,color:SUB,fontWeight:600,marginBottom:5}}>ข้อความสำเร็จรูป (แตะเพื่อใช้ · กด × เพื่อลบ)</div>
+    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{taskPresets.map(t=><span key={t} style={{display:"inline-flex",alignItems:"center",background:C.navySoft,borderRadius:20,maxWidth:"100%"}}>
+      <button onClick={()=>onPick(t)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:13,color:C.navy,fontWeight:600,padding:"5px 4px 5px 11px",textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:240}}>{t}</button>
+      <button onClick={()=>forget(t)} title="ลบข้อความนี้" style={{background:"none",border:"none",cursor:"pointer",color:SUB,fontSize:15,padding:"3px 9px 3px 4px"}}>×</button></span>)}</div></div>;
   const patchMany=(ids,patch)=>{ if(!ids.length) return Promise.resolve();
     const p={...patch,updatedAt:Date.now()}, set=new Set(ids);
     setFixes(prev=>prev.map(x=>set.has(x.id)?{...x,...p}:x));
@@ -1563,6 +1575,7 @@ function FixView({fixes,setFixes}){
     if(!ids.length) return alert("เลือกรายการที่ยังไม่ “แก้ผ่านแล้ว” ก่อน (ติ๊กหน้ารายชื่อ)");
     setBulk({ids,task:"",dueDate:"",markAssigned:true,skipped:selIds.length-ids.length}); };
   const applyBulk=async()=>{ if(!bulk.task.trim()&&!bulk.dueDate) return alert("กรอกภาระงานหรือวันครบกำหนดอย่างน้อย 1 อย่าง");
+    remember(bulk.task);
     const patch={}; if(bulk.task.trim()) patch.task=bulk.task.trim(); if(bulk.dueDate) patch.dueDate=bulk.dueDate;
     const na=bulk.ids.filter(id=>{ const x=fixes.find(y=>y.id===id); return x&&x.status==="notassigned"; });
     const rest=bulk.ids.filter(id=>!na.includes(id));
@@ -1576,7 +1589,7 @@ function FixView({fixes,setFixes}){
     if(!window.confirm("ลบ "+selIds.length+" รายการที่เลือกออกจากระบบ? (ไม่กระทบระบบจัดการผลการเรียน)")) return;
     const set=new Set(selIds); setFixes(prev=>prev.filter(x=>!set.has(x.id))); save(persist.deleteFixes(selIds)); setSel({}); };
   const openEdit=(x)=>setEdit({id:x.id,task:x.task||"",dueDate:x.dueDate||"",status:x.status||"notassigned",newResult:x.newResult||"",note:x.note||""});
-  const saveEdit=async()=>{ const {id,...p}=edit; await patchMany([id],{task:p.task.trim(),dueDate:p.dueDate,status:p.status,newResult:p.newResult.trim(),note:p.note.trim()}); setEdit(null); };
+  const saveEdit=async()=>{ const {id,...p}=edit; remember(p.task); await patchMany([id],{task:p.task.trim(),dueDate:p.dueDate,status:p.status,newResult:p.newResult.trim(),note:p.note.trim()}); setEdit(null); };
 
   /* ----- ส่งออก ----- */
   const exportXlsx=()=>{ if(!list.length) return alert("ไม่มีรายการให้ส่งออก");
@@ -1678,6 +1691,7 @@ function FixView({fixes,setFixes}){
       {bulk && <div>
         {bulk.skipped>0 && <div style={{fontSize:13,color:SUB,marginBottom:10}}>ข้าม {bulk.skipped} รายการที่ “แก้ผ่านแล้ว”</div>}
         <Field label="ภาระงาน / สิ่งที่ต้องทำเพื่อแก้"><textarea style={{...inputStyle,minHeight:80,resize:"vertical"}} value={bulk.task} onChange={e=>setBulk({...bulk,task:e.target.value})} placeholder="เช่น ส่งใบงานที่ 1-5 และสอบแก้ตัว"/></Field>
+        {presetBox(t=>setBulk({...bulk,task:t}))}
         <Field label="วันครบกำหนดส่ง"><input type="date" style={inputStyle} value={bulk.dueDate} onChange={e=>setBulk({...bulk,dueDate:e.target.value})}/></Field>
         <label style={{display:"flex",gap:8,alignItems:"center",fontSize:14,marginBottom:14,cursor:"pointer"}}><input type="checkbox" checked={bulk.markAssigned} onChange={e=>setBulk({...bulk,markAssigned:e.target.checked})} style={{width:18,height:18}}/>เปลี่ยนสถานะเป็น “มอบแล้ว” (เฉพาะที่ยังไม่มอบงาน)</label>
         <Btn variant="accent" onClick={applyBulk} style={{width:"100%"}}><Save size={16}/>บันทึก</Btn>
@@ -1689,6 +1703,7 @@ function FixView({fixes,setFixes}){
         <div style={{fontWeight:700,color:C.navy}}>{x.studentName} <span style={{color:SUB,fontWeight:500}}>({x.grade})</span></div>
         <div style={{fontSize:13,color:SUB,marginBottom:14}}>{x.subjectCode} {x.subjectName} · {x.term}</div>
         <Field label="ภาระงาน"><textarea style={{...inputStyle,minHeight:70,resize:"vertical"}} value={edit.task} onChange={e=>setEdit({...edit,task:e.target.value})}/></Field>
+        {presetBox(t=>setEdit({...edit,task:t}))}
         <Field label="วันครบกำหนดส่ง"><input type="date" style={inputStyle} value={edit.dueDate} onChange={e=>setEdit({...edit,dueDate:e.target.value})}/></Field>
         <Field label="สถานะ"><select style={inputStyle} value={edit.status} onChange={e=>setEdit({...edit,status:e.target.value})}>{FIX_STATUS.map(o=><option key={o.v} value={o.v}>{o.label}</option>)}</select></Field>
         <Field label="ผลการเรียนใหม่ (ถ้ามี)"><input style={inputStyle} value={edit.newResult} onChange={e=>setEdit({...edit,newResult:e.target.value})} placeholder="เช่น 1.5"/></Field>
