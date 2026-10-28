@@ -205,9 +205,11 @@ function makePersist(){
     const noop = async()=>{};
     return { addSubject:noop,updateSubject:noop,deleteSubject:noop,replaceStudents:noop,setStudentStatus:noop,
       deleteStudent:noop,setAttendanceDay:noop,addAssignment:noop,updateAssignment:noop,
-      deleteAssignment:noop,setScoreDoc:noop,addNote:noop,updateNote:noop,deleteNote:noop,setLogo:noop,setQinfo:noop };
+      deleteAssignment:noop,setScoreDoc:noop,addNote:noop,updateNote:noop,deleteNote:noop,setLogo:noop,setQinfo:noop,
+      setFixes:noop,updateFixes:noop,deleteFixes:noop };
   }
   const col = (n)=>db.collection(n);
+  const writeChunks = async(items,fn)=>{ for(let i=0;i<items.length;i+=400){ const b=db.batch(); items.slice(i,i+400).forEach(it=>fn(b,it)); await b.commit(); } };
   const deleteWhere = async(name,subjId)=>{
     const snap = await col(name).where("subjectId","==",subjId).get();
     await Promise.all(snap.docs.map(d=>d.ref.delete()));
@@ -231,6 +233,10 @@ function makePersist(){
     deleteNote:(id)=>col("notes").doc(id).delete(),
     setLogo:(url)=>col("settings").doc("app").set({logoUrl:url}),
     setQinfo:(docId,data)=>col("qinfo").doc(docId).set(data),
+    /* งานแก้ 0 ร มส (คอลเลกชัน fixes) — เขียนเป็นชุดละไม่เกิน 400 รายการ */
+    setFixes:(list)=>writeChunks(list,(b,f)=>{ const {id,...d}=f; b.set(col("fixes").doc(id),d,{merge:true}); }),
+    updateFixes:(ids,patch)=>writeChunks(ids,(b,id)=>b.set(col("fixes").doc(id),patch,{merge:true})),
+    deleteFixes:(ids)=>writeChunks(ids,(b,id)=>b.delete(col("fixes").doc(id))),
   };
 }
 
@@ -292,6 +298,7 @@ function App(){
   const [notes,setNotes]=useState({});
   const [logoUrl,setLogoUrl]=useState("");
   const [qinfo,setQinfo]=useState({});
+  const [fixes,setFixes]=useState([]);
   const [loading,setLoading]=useState(true);
   const [view,setView]=useState("home");
   const [activeSubj,setActiveSubj]=useState(null);
@@ -328,6 +335,9 @@ function App(){
         // Q-Info mapping (แยกโหลด — ถ้าพังจะไม่กระทบข้อมูลส่วนอื่น)
         try{ const qi=await db.collection("qinfo").get(); const qiObj={}; qi.docs.forEach(d=>qiObj[d.id]=d.data()); if(alive) setQinfo(qiObj); }
         catch(e){ console.warn("โหลด qinfo ไม่ได้",e); }
+        // งานแก้ 0 ร มส (แยกโหลด — ถ้า Rules ยังไม่อนุญาตจะไม่กระทบข้อมูลส่วนอื่น)
+        try{ const fx=await db.collection("fixes").get(); if(alive) setFixes(fx.docs.map(d=>({id:d.id,...d.data()}))); }
+        catch(e){ console.warn("โหลด fixes ไม่ได้",e); }
       }catch(e){ console.error("โหลดข้อมูลล้มเหลว:",e); }
       if(alive) setLoading(false);
     }
@@ -346,19 +356,20 @@ function App(){
   <div style={{minHeight:"100vh",color:C.text}}>
     <header style={{background:C.navy,color:"#fff",position:"sticky",top:0,zIndex:40,borderBottom:"3px solid "+C.accent}}>
       <div style={{maxWidth:920,margin:"0 auto",padding:"11px 16px",display:"flex",alignItems:"center",gap:12}}>
-        {view!=="home" && <button onClick={()=>setView(view==="class"?"home":"class")} style={{background:"rgba(255,255,255,.12)",border:"none",color:"#fff",borderRadius:8,padding:7,cursor:"pointer",display:"flex"}}><ChevronLeft size={20}/></button>}
+        {view!=="home" && <button onClick={()=>setView(view==="class"||view==="fix"?"home":"class")} style={{background:"rgba(255,255,255,.12)",border:"none",color:"#fff",borderRadius:8,padding:7,cursor:"pointer",display:"flex"}}><ChevronLeft size={20}/></button>}
         {logoUrl ? <img src={logoUrl} alt="logo" style={{width:34,height:34,borderRadius:8,objectFit:"cover",background:"#fff"}}/> :
           <div style={{width:34,height:34,borderRadius:8,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center"}}><BookOpen size={19}/></div>}
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontWeight:700,fontSize:16,lineHeight:1.15}}>บันทึกการสอนครูนนท์</div>
-          <div style={{fontSize:12,color:"#b9c6d6"}}>{view==="home"?"รายวิชาที่รับผิดชอบ":subj?subj.name+" · "+subj.room:"ตั้งค่าระบบ"}</div>
+          <div style={{fontSize:12,color:"#b9c6d6"}}>{view==="home"?"รายวิชาที่รับผิดชอบ":view==="fix"?"งานแก้ 0 ร มส":subj?subj.name+" · "+subj.room:"ตั้งค่าระบบ"}</div>
         </div>
         <button onClick={()=>setView("settings")} title="ตั้งค่า" style={{background:view==="settings"?C.accent:"rgba(255,255,255,.12)",border:"none",color:"#fff",borderRadius:8,padding:8,cursor:"pointer",display:"flex"}}><Settings size={20}/></button>
       </div>
     </header>
     {!FB && <div style={{background:"#fbf4e0",color:"#8a6d1b",fontSize:13,textAlign:"center",padding:"7px 12px"}}>โหมดทดลอง (ยังไม่ได้ต่อ Firestore) — ข้อมูลจะไม่ถูกบันทึก เมื่อ deploy บน GitHub Pages จะบันทึกอัตโนมัติ</div>}
     <main style={{maxWidth:920,margin:"0 auto",padding:16,paddingBottom:60}}>
-      {view==="home" && <HomeView subjects={subjects} setSubjects={setSubjects} openSubject={openSubject} students={students} setStudents={setStudents}/>}
+      {view==="home" && <HomeView subjects={subjects} setSubjects={setSubjects} openSubject={openSubject} students={students} setStudents={setStudents} fixes={fixes} openFix={()=>setView("fix")}/>}
+      {view==="fix" && <FixView fixes={fixes} setFixes={setFixes}/>}
       {view==="class" && subj && <ClassView subj={subj} setView={setView} students={students[subj.id]||[]}/>}
       {view==="attendance" && subj && <AttendanceView subj={subj} students={students[subj.id]||[]} attendance={attendance} setAttendance={setAttendance}/>}
       {view==="scores" && subj && <ScoresView subj={subj} setView={setView} students={students[subj.id]||[]} assignments={assignments} setAssignments={setAssignments} scores={scores} setScores={setScores}/>}
@@ -372,7 +383,7 @@ function App(){
 }
 
 /* ---------- HOME ---------- */
-function HomeView({subjects,setSubjects,openSubject,students,setStudents}){
+function HomeView({subjects,setSubjects,openSubject,students,setStudents,fixes,openFix}){
   const persist=usePersist();
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({name:"",code:"",room:"",color:CARD_COLORS[0]});
@@ -392,6 +403,16 @@ function HomeView({subjects,setSubjects,openSubject,students,setStudents}){
       <h2 style={{margin:0,fontSize:19,color:C.navy}}>รายวิชาที่รับผิดชอบ</h2>
       <Btn variant="accent" onClick={openAdd}><Plus size={17}/>เพิ่มวิชา</Btn>
     </div>
+    <button onClick={openFix} style={{display:"flex",alignItems:"center",gap:14,textAlign:"left",width:"100%",background:"#fff",border:"1px solid "+C.border,borderLeft:"5px solid #c0392b",borderRadius:12,padding:"13px 16px",cursor:"pointer",fontFamily:"inherit",marginBottom:14}}>
+      <div style={{width:44,height:44,borderRadius:10,background:"#c0392b",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><ClipboardList size={22}/></div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:16.5,fontWeight:700,color:C.navy}}>งานแก้ 0 ร มส</div>
+        <div style={{fontSize:13.5,color:SUB}}>{(fixes||[]).length
+          ? "ยังไม่มอบงาน "+fixes.filter(x=>x.status==="notassigned").length+" · มอบแล้ว "+fixes.filter(x=>x.status==="assigned").length+" · แก้ผ่านแล้ว "+fixes.filter(x=>x.status==="passed").length+(fixes.filter(isOverdue).length?" · เกินกำหนด "+fixes.filter(isOverdue).length:"")
+          : "นำเข้าไฟล์จากระบบจัดการผลการเรียน เพื่อมอบภาระงานและติดตามสถานะ"}</div>
+      </div>
+      <div style={{transform:"rotate(180deg)",color:SUB}}><ChevronLeft size={20}/></div>
+    </button>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12}}>
       {subjects.map(s=><div key={s.id} style={{background:"#fff",border:"1px solid "+C.border,borderRadius:12,overflow:"hidden"}}>
         <div onClick={()=>openSubject(s.id)} style={{cursor:"pointer"}}>
@@ -1427,6 +1448,257 @@ function QinfoView({subj,students,assignments,scores,qinfo,setQinfo}){
 }
 
 /* ---------- SETTINGS ---------- */
+/* ==================== งานแก้ 0 ร มส ==================== */
+const FIX_STATUS=[
+  {v:"notassigned",label:"ยังไม่มอบงาน",color:"#c0392b",bg:"#fbeae8"},
+  {v:"assigned",label:"มอบแล้ว",color:"#b7791f",bg:"#fdf3dc"},
+  {v:"passed",label:"แก้ผ่านแล้ว",color:"#2e7d52",bg:"#e6f4ec"},
+];
+const fixStatusOf=(v)=>FIX_STATUS.find(x=>x.v===v)||FIX_STATUS[0];
+const FIX_XL={notassigned:{fill:"FBEAE8",font:"C0392B"},assigned:{fill:"FDF3DC",font:"B7791F"},passed:{fill:"E6F4EC",font:"2E7D52"}};
+const FIX_GRADE={"0":{color:"#c0392b",bg:"#fbeae8"},"ร":{color:"#b7791f",bg:"#fdf3dc"},"มส":{color:"#7a3ea0",bg:"#f1e8f7"}};
+const localToday=()=>{ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const normKey=(s)=>String(s==null?"":s).replace(/\s+/g,"");
+const hash32=(s,seed)=>{ let h=seed; for(let i=0;i<s.length;i++){ h=((h<<5)+h+s.charCodeAt(i))|0; } return (h>>>0).toString(36); };
+/* รหัสเอกสาร = hash ของ (ชื่อนักเรียน|รหัสวิชา|ภาคเรียน) → นำเข้าไฟล์ซ้ำจะอัปเดตรายการเดิม ไม่เกิดรายการซ้ำ และไม่ทับภาระงาน/สถานะที่ตั้งไว้ */
+const fixKeyOf=(f)=>[normKey(f.studentName),normKey(f.subjectCode),normKey(f.term)].join("|");
+const fixIdOf=(f)=>{ const k=fixKeyOf(f); return "fx_"+hash32(k,5381)+hash32(k.split("").reverse().join(""),33); };
+const isOverdue=(f)=>f.status!=="passed" && !!f.dueDate && f.dueDate<localToday();
+const daysLate=(f)=>Math.round((new Date(localToday()+"T00:00:00")-new Date(f.dueDate+"T00:00:00"))/864e5);
+
+/* หัวคอลัมน์ที่รองรับ (ไฟล์จาก “ระบบจัดการผลการเรียน → ส่งออกให้ Teaching Log” หรือ Excel ของหน้าตรวจสอบ/หน้าหลัก) */
+const FIX_COLS={
+  name:["ชื่อ-สกุล","ชื่อ - สกุล","ชื่อสกุล","นักเรียน"],
+  level:["ชั้น"],
+  code:["รหัสวิชา"],
+  sname:["ชื่อวิชา"],
+  term:["ภาคเรียน/ปีการศึกษา","ภาคเรียน"],
+  grade:["ผลการเรียน","ผลการเรียนเดิม"],
+  teacher:["ครูผู้สอน"],
+  srcStatus:["สถานะการแก้ไข","สถานะ"],
+  newResult:["ผลการเรียนใหม่"],
+};
+function parseFixWorkbook(wb){
+  const map=new Map(), skipped=[];
+  wb.SheetNames.forEach(sn=>{
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:""});
+    let hi=-1;
+    for(let i=0;i<Math.min(rows.length,15);i++){
+      const t=(rows[i]||[]).map(c=>String(c).trim());
+      if(t.includes("รหัสวิชา") && t.some(x=>FIX_COLS.name.includes(x)) && t.some(x=>FIX_COLS.grade.includes(x))){ hi=i; break; }
+    }
+    if(hi<0) return;
+    const head=rows[hi].map(c=>String(c).trim());
+    const ix={}; Object.keys(FIX_COLS).forEach(k=>{ ix[k]=-1; for(const n of FIX_COLS[k]){ const i=head.indexOf(n); if(i>=0){ ix[k]=i; break; } } });
+    rows.slice(hi+1).forEach((r,j)=>{
+      const g=(k)=>ix[k]>=0?String(r[ix[k]]==null?"":r[ix[k]]).trim():"";
+      const studentName=g("name").replace(/\s+/g," "), subjectCode=g("code");
+      if(!studentName && !subjectCode) return;                       // แถวว่าง
+      const grade=g("grade");
+      if(!studentName||!subjectCode){ skipped.push(sn+" แถว "+(hi+j+2)+": ไม่มีชื่อหรือรหัสวิชา"); return; }
+      if(!["0","ร","มส"].includes(grade)){ skipped.push(sn+" แถว "+(hi+j+2)+": ผลการเรียน “"+grade+"” ไม่ใช่ 0 / ร / มส"); return; }
+      const it={studentName,level:g("level"),subjectCode,subjectName:g("sname"),term:g("term"),grade,teacher:g("teacher"),srcStatus:g("srcStatus"),newResult:g("newResult")};
+      map.set(fixIdOf(it),it);                                        // ซ้ำ (เช่น หลายชีต) เก็บอันสุดท้าย
+    });
+  });
+  return {items:[...map.values()],skipped};
+}
+
+function FixView({fixes,setFixes}){
+  const persist=usePersist();
+  const [f,setF]=useState({q:"",subject:"",grade:"",status:"",overdue:false});
+  const [sel,setSel]=useState({});
+  const [edit,setEdit]=useState(null);
+  const [bulk,setBulk]=useState(null);
+  const [imp,setImp]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const fileRef=useRef();
+
+  const save=async(promise)=>{ try{ await promise; }
+    catch(e){ console.error(e); alert("บันทึกลงฐานข้อมูลไม่สำเร็จ: "+(e.message||e)+"\n(ตรวจสอบ Firestore Rules ว่าอนุญาตคอลเลกชัน fixes)"); } };
+  const patchMany=(ids,patch)=>{ if(!ids.length) return Promise.resolve();
+    const p={...patch,updatedAt:Date.now()}, set=new Set(ids);
+    setFixes(prev=>prev.map(x=>set.has(x.id)?{...x,...p}:x));
+    return save(persist.updateFixes(ids,p)); };
+
+  const subjects=useMemo(()=>{ const m=new Map(); fixes.forEach(x=>{ if(!m.has(x.subjectCode)) m.set(x.subjectCode,x.subjectName||""); });
+    return [...m.entries()].sort((a,b)=>String(a[0]).localeCompare(String(b[0]),"th")); },[fixes]);
+  const list=useMemo(()=>{ const q=normKey(f.q).toLowerCase();
+    return fixes.filter(x=>(!f.subject||x.subjectCode===f.subject)&&(!f.grade||x.grade===f.grade)&&(!f.status||x.status===f.status)&&(!f.overdue||isOverdue(x))
+      &&(!q||(normKey(x.studentName)+x.subjectCode+normKey(x.subjectName)).toLowerCase().includes(q)))
+      .sort((a,b)=>String(a.subjectCode).localeCompare(String(b.subjectCode),"th")||String(a.level).localeCompare(String(b.level),"th",{numeric:true})||String(a.studentName).localeCompare(String(b.studentName),"th")); },[fixes,f]);
+  const cnt=useMemo(()=>({all:fixes.length,notassigned:fixes.filter(x=>x.status==="notassigned").length,assigned:fixes.filter(x=>x.status==="assigned").length,
+    passed:fixes.filter(x=>x.status==="passed").length,overdue:fixes.filter(isOverdue).length}),[fixes]);
+  const selIds=Object.keys(sel).filter(k=>sel[k]&&fixes.some(x=>x.id===k));
+  const shown=list.slice(0,400);
+  const allShownSel=shown.length>0&&shown.every(x=>sel[x.id]);
+  const toggleAll=()=>{ const n={...sel}; shown.forEach(x=>{ n[x.id]=!allShownSel; }); setSel(n); };
+
+  /* ----- นำเข้า ----- */
+  const onFile=(e)=>{ const file=e.target.files[0]; e.target.value=""; if(!file) return;
+    const reader=new FileReader();
+    reader.onload=(ev)=>{ try{
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:"array"});
+      const {items,skipped}=parseFixWorkbook(wb);
+      if(!items.length){ alert("ไม่พบรายการที่นำเข้าได้ในไฟล์นี้\n\nไฟล์ต้องมีหัวคอลัมน์ ชื่อ-สกุล, รหัสวิชา, ผลการเรียน\n(ดาวน์โหลดจากระบบจัดการผลการเรียน → ส่งออก → ส่งออกให้ Teaching Log)"+(skipped.length?"\n\nข้ามไป "+skipped.length+" แถว เช่น "+skipped[0]:"")); return; }
+      const have=new Set(fixes.map(x=>x.id));
+      const newN=items.filter(it=>!have.has(fixIdOf(it))).length;
+      setImp({items,skipped,newN,updN:items.length-newN,autoPass:true,fileName:file.name,doneN:items.filter(it=>it.srcStatus==="แก้ไขแล้ว").length});
+    }catch(err){ alert("อ่านไฟล์ไม่สำเร็จ: "+err.message); } };
+    reader.readAsArrayBuffer(file); };
+  const confirmImport=async()=>{ setBusy(true);
+    const now=Date.now(), byId=new Map(fixes.map(x=>[x.id,x])), recs=[];
+    imp.items.forEach(it=>{ const id=fixIdOf(it), old=byId.get(id), srcDone=it.srcStatus==="แก้ไขแล้ว";
+      const base={studentName:it.studentName,level:it.level,subjectCode:it.subjectCode,subjectName:it.subjectName,term:it.term,grade:it.grade,teacher:it.teacher,
+        srcStatus:it.srcStatus,newResult:it.newResult||(old&&old.newResult)||"",importedAt:now,updatedAt:now};
+      if(old){ const r={...old,...base}; if(imp.autoPass&&srcDone&&old.status!=="passed") r.status="passed"; recs.push(r); }
+      else recs.push({id,...base,task:"",dueDate:"",status:(imp.autoPass&&srcDone)?"passed":"notassigned",note:"",createdAt:now});
+    });
+    setFixes(prev=>{ const m=new Map(prev.map(x=>[x.id,x])); recs.forEach(r=>m.set(r.id,r)); return [...m.values()]; });
+    await save(persist.setFixes(recs));
+    setBusy(false); setImp(null); };
+
+  /* ----- มอบภาระงาน / เปลี่ยนสถานะ ----- */
+  const openBulk=()=>{ const ids=selIds.filter(id=>{ const x=fixes.find(y=>y.id===id); return x&&x.status!=="passed"; });
+    if(!ids.length) return alert("เลือกรายการที่ยังไม่ “แก้ผ่านแล้ว” ก่อน (ติ๊กหน้ารายชื่อ)");
+    setBulk({ids,task:"",dueDate:"",markAssigned:true,skipped:selIds.length-ids.length}); };
+  const applyBulk=async()=>{ if(!bulk.task.trim()&&!bulk.dueDate) return alert("กรอกภาระงานหรือวันครบกำหนดอย่างน้อย 1 อย่าง");
+    const patch={}; if(bulk.task.trim()) patch.task=bulk.task.trim(); if(bulk.dueDate) patch.dueDate=bulk.dueDate;
+    const na=bulk.ids.filter(id=>{ const x=fixes.find(y=>y.id===id); return x&&x.status==="notassigned"; });
+    const rest=bulk.ids.filter(id=>!na.includes(id));
+    if(bulk.markAssigned) await patchMany(na,{...patch,status:"assigned"}); else await patchMany(na,patch);
+    await patchMany(rest,patch);
+    setBulk(null); setSel({}); };
+  const bulkStatus=(v)=>{ if(!v||!selIds.length) return;
+    if(!window.confirm("ตั้งสถานะ “"+fixStatusOf(v).label+"” ให้ "+selIds.length+" รายการที่เลือก?")) return;
+    patchMany(selIds,{status:v}); setSel({}); };
+  const removeSel=()=>{ if(!selIds.length) return;
+    if(!window.confirm("ลบ "+selIds.length+" รายการที่เลือกออกจากระบบ? (ไม่กระทบระบบจัดการผลการเรียน)")) return;
+    const set=new Set(selIds); setFixes(prev=>prev.filter(x=>!set.has(x.id))); save(persist.deleteFixes(selIds)); setSel({}); };
+  const openEdit=(x)=>setEdit({id:x.id,task:x.task||"",dueDate:x.dueDate||"",status:x.status||"notassigned",newResult:x.newResult||"",note:x.note||""});
+  const saveEdit=async()=>{ const {id,...p}=edit; await patchMany([id],{task:p.task.trim(),dueDate:p.dueDate,status:p.status,newResult:p.newResult.trim(),note:p.note.trim()}); setEdit(null); };
+
+  /* ----- ส่งออก ----- */
+  const exportXlsx=()=>{ if(!list.length) return alert("ไม่มีรายการให้ส่งออก");
+    const H=["ที่","ชื่อ-สกุล","ชั้น","รหัสวิชา","ชื่อวิชา","ภาคเรียน/ปีการศึกษา","ผลการเรียนเดิม","ภาระงาน","กำหนดส่ง","สถานะงานแก้","ผลการเรียนใหม่","หมายเหตุ","ครูผู้สอน"];
+    const rows=list.map((x,i)=>[i+1,x.studentName,x.level||"",x.subjectCode,x.subjectName||"",x.term||"",x.grade,x.task||"",x.dueDate?fmtDate(x.dueDate):"",
+      fixStatusOf(x.status).label+(isOverdue(x)?" (เกินกำหนด)":""),x.newResult||"",x.note||"",x.teacher||""]);
+    const ws=XLSX.utils.aoa_to_sheet([H,...rows]);
+    ws["!cols"]=[5,26,8,11,28,16,12,32,14,24,12,26,20].map(w=>({wch:w}));
+    H.forEach((_,c)=>{ const ref=XLSX.utils.encode_cell({r:0,c}); ws[ref].s={fill:{patternType:"solid",fgColor:{rgb:"1F3A5F"}},font:{color:{rgb:"FFFFFF"},bold:true},alignment:{horizontal:"center",vertical:"center"}}; });
+    list.forEach((x,i)=>{ const ref=XLSX.utils.encode_cell({r:i+1,c:9}); const c0=FIX_XL[x.status]||FIX_XL.notassigned;
+      if(ws[ref]) ws[ref].s={fill:{patternType:"solid",fgColor:{rgb:c0.fill}},font:{color:{rgb:c0.font},bold:true}}; });
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"งานแก้ 0 ร มส");
+    XLSX.writeFile(wb,"งานแก้_0_ร_มส_"+localToday()+".xlsx"); };
+
+  const chip=(label,n,on,onClick,color)=><button onClick={onClick} style={{flex:"1 1 110px",textAlign:"left",padding:"9px 12px",borderRadius:10,cursor:"pointer",fontFamily:"inherit",
+    border:"2px solid "+(on?color:C.border),background:on?color+"14":"#fff"}}><div style={{fontSize:12.5,color:SUB,fontWeight:600}}>{label}</div><div style={{fontSize:22,fontWeight:700,color}}>{n}</div></button>;
+
+  return <div>
+    <SectionHead title="งานแก้ 0 ร มส" right={<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      <Btn variant="accent" onClick={()=>fileRef.current&&fileRef.current.click()}><Upload size={16}/>นำเข้าไฟล์ (.xlsx)</Btn>
+      <Btn variant="ghost" onClick={exportXlsx} disabled={!list.length}><Download size={16}/>ส่งออก Excel{list.length!==fixes.length?" ("+list.length+")":""}</Btn>
+      <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onFile} style={{display:"none"}}/>
+    </div>}/>
+
+    {fixes.length===0 ? <div style={{...panel,textAlign:"center",color:SUB,lineHeight:1.7}}>
+      <div style={{fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>ยังไม่มีรายการ</div>
+      1) ที่ระบบจัดการผลการเรียน เมนู <b>ส่งออก &amp; พิมพ์ → ส่งออกให้ Teaching Log</b> (หรือหน้าตรวจสอบของครู ปุ่ม “ไฟล์สำหรับ Teaching Log”)<br/>
+      2) กด <b>นำเข้าไฟล์ (.xlsx)</b> ด้านบน แล้วเลือกไฟล์ที่ดาวน์โหลดมา<br/>
+      3) ติ๊กเลือกนักเรียน → <b>มอบภาระงาน</b> พร้อมวันครบกำหนด แล้วติดตามสถานะ
+    </div> : <>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        {chip("ทั้งหมด",cnt.all,!f.status&&!f.overdue,()=>setF({...f,status:"",overdue:false}),C.navy)}
+        {chip("ยังไม่มอบงาน",cnt.notassigned,f.status==="notassigned",()=>setF({...f,status:f.status==="notassigned"?"":"notassigned",overdue:false}),"#c0392b")}
+        {chip("มอบแล้ว",cnt.assigned,f.status==="assigned",()=>setF({...f,status:f.status==="assigned"?"":"assigned",overdue:false}),"#b7791f")}
+        {chip("แก้ผ่านแล้ว",cnt.passed,f.status==="passed",()=>setF({...f,status:f.status==="passed"?"":"passed",overdue:false}),"#2e7d52")}
+        {chip("เกินกำหนด",cnt.overdue,f.overdue,()=>setF({...f,status:"",overdue:!f.overdue}),"#d9480f")}
+      </div>
+      <div style={{...panel,padding:12,marginBottom:12,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
+        <input style={inputStyle} placeholder="ค้นหาชื่อ / วิชา" value={f.q} onChange={e=>setF({...f,q:e.target.value})}/>
+        <select style={inputStyle} value={f.subject} onChange={e=>setF({...f,subject:e.target.value})}><option value="">ทุกวิชา</option>{subjects.map(([c,n])=><option key={c} value={c}>{c} {n}</option>)}</select>
+        <select style={inputStyle} value={f.grade} onChange={e=>setF({...f,grade:e.target.value})}><option value="">ทั้ง 0 / ร / มส</option><option value="0">0</option><option value="ร">ร</option><option value="มส">มส</option></select>
+      </div>
+
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
+        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:14,color:C.navy,fontWeight:600,cursor:"pointer"}}><input type="checkbox" checked={allShownSel} onChange={toggleAll} style={{width:18,height:18}}/>เลือกทั้งหมดที่แสดง ({shown.length})</label>
+        <div style={{flex:1}}/>
+        {selIds.length>0 && <>
+          <span style={{fontSize:13.5,color:SUB}}>เลือก {selIds.length} รายการ</span>
+          <Btn size="sm" variant="accent" onClick={openBulk}><Pencil size={14}/>มอบภาระงาน</Btn>
+          <select value="" onChange={e=>bulkStatus(e.target.value)} style={{...inputStyle,width:"auto",padding:"6px 8px",fontSize:13}}><option value="">ตั้งสถานะ…</option>{FIX_STATUS.map(s=><option key={s.v} value={s.v}>{s.label}</option>)}</select>
+          <Btn size="sm" variant="danger" onClick={removeSel}><Trash2 size={14}/>ลบ</Btn>
+        </>}
+      </div>
+
+      <div style={{...tableWrap}}>
+        {shown.map(x=>{ const st=fixStatusOf(x.status), gc=FIX_GRADE[x.grade]||FIX_GRADE["0"], od=isOverdue(x);
+          return <div key={x.id} className="tl-row" style={{display:"flex",gap:10,alignItems:"flex-start",padding:"11px 12px",borderTop:"1px solid "+C.border,flexWrap:"wrap"}}>
+            <input type="checkbox" checked={!!sel[x.id]} onChange={e=>setSel({...sel,[x.id]:e.target.checked})} style={{width:18,height:18,marginTop:3}}/>
+            <div style={{flex:"1 1 240px",minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <b style={{color:C.navy,fontSize:15.5}}>{x.studentName}</b>
+                <span style={{background:gc.bg,color:gc.color,fontWeight:700,fontSize:12.5,padding:"2px 9px",borderRadius:20}}>{x.grade}</span>
+                {x.newResult && <span style={{fontSize:12.5,color:"#2e7d52",fontWeight:600}}>→ {x.newResult}</span>}
+              </div>
+              <div style={{fontSize:13,color:SUB}}>{x.level?x.level+" · ":""}{x.subjectCode} {x.subjectName} · ภาคเรียน {x.term||"—"}</div>
+              <div style={{fontSize:13.5,marginTop:3,color:x.task?C.text:"#9aa5b1"}}>{x.task?"📌 "+x.task:"ยังไม่ระบุภาระงาน"}
+                {x.dueDate && <span style={{marginLeft:8,fontWeight:600,color:od?"#d9480f":SUB}}>· ส่งภายใน {fmtDate(x.dueDate)}{od?" (เกิน "+daysLate(x)+" วัน)":""}</span>}</div>
+              {x.note && <div style={{fontSize:12.5,color:SUB}}>📝 {x.note}</div>}
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <select value={x.status||"notassigned"} onChange={e=>patchMany([x.id],{status:e.target.value})} style={{fontFamily:"inherit",fontSize:13.5,fontWeight:700,padding:"6px 8px",borderRadius:8,border:"1px solid "+C.border,color:st.color,background:st.bg,cursor:"pointer"}}>
+                {FIX_STATUS.map(o=><option key={o.v} value={o.v}>{o.label}</option>)}</select>
+              <button onClick={()=>openEdit(x)} title="แก้ไขรายละเอียด" style={{background:"none",border:"none",color:C.navy,cursor:"pointer",padding:4}}><Pencil size={17}/></button>
+            </div>
+          </div>; })}
+        {shown.length===0 && <div style={{padding:30,textAlign:"center",color:SUB}}>ไม่พบรายการตามตัวกรอง</div>}
+      </div>
+      {list.length>shown.length && <div style={{textAlign:"center",color:SUB,fontSize:13,marginTop:8}}>แสดง {shown.length} จาก {list.length} รายการ — ใช้ตัวกรองเพื่อดูส่วนที่เหลือ</div>}
+    </>}
+
+    <Modal open={!!imp} onClose={()=>!busy&&setImp(null)} title="นำเข้างานแก้ 0 ร มส" width={520}>
+      {imp && <div>
+        <div style={{fontSize:13.5,color:SUB,marginBottom:10}}>ไฟล์: {imp.fileName}</div>
+        <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:110,...panel,padding:10,textAlign:"center"}}><div style={{fontSize:12.5,color:SUB}}>เพิ่มใหม่</div><div style={{fontSize:24,fontWeight:700,color:"#2e7d52"}}>{imp.newN}</div></div>
+          <div style={{flex:1,minWidth:110,...panel,padding:10,textAlign:"center"}}><div style={{fontSize:12.5,color:SUB}}>มีอยู่แล้ว (อัปเดตข้อมูลเดิม)</div><div style={{fontSize:24,fontWeight:700,color:C.navy}}>{imp.updN}</div></div>
+          <div style={{flex:1,minWidth:110,...panel,padding:10,textAlign:"center"}}><div style={{fontSize:12.5,color:SUB}}>ข้าม</div><div style={{fontSize:24,fontWeight:700,color:imp.skipped.length?"#c0392b":SUB}}>{imp.skipped.length}</div></div>
+        </div>
+        <div style={{fontSize:13.5,color:SUB,lineHeight:1.6,marginBottom:10}}>รายการที่มีอยู่แล้วจะ<b>คงภาระงาน กำหนดส่ง และสถานะที่ตั้งไว้</b> อัปเดตเฉพาะข้อมูลจากระบบผลการเรียน</div>
+        {imp.doneN>0 && <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:14,marginBottom:12,cursor:"pointer"}}>
+          <input type="checkbox" checked={imp.autoPass} onChange={e=>setImp({...imp,autoPass:e.target.checked})} style={{width:18,height:18,marginTop:2}}/>
+          <span>ในไฟล์มี {imp.doneN} รายการที่ระบุว่า “แก้ไขแล้ว” ในระบบผลการเรียน — ตั้งสถานะเป็น <b>แก้ผ่านแล้ว</b> ให้อัตโนมัติ</span></label>}
+        {imp.skipped.length>0 && <details style={{fontSize:12.5,color:"#c0392b",marginBottom:12}}><summary style={{cursor:"pointer"}}>ดูแถวที่ถูกข้าม</summary>{imp.skipped.slice(0,20).map((s,i)=><div key={i}>{s}</div>)}{imp.skipped.length>20&&<div>… และอีก {imp.skipped.length-20} แถว</div>}</details>}
+        <Btn variant="primary" onClick={confirmImport} disabled={busy} style={{width:"100%"}}><Save size={16}/>{busy?"กำลังบันทึก…":"ยืนยันนำเข้า "+imp.items.length+" รายการ"}</Btn>
+      </div>}
+    </Modal>
+
+    <Modal open={!!bulk} onClose={()=>setBulk(null)} title={bulk?"มอบภาระงาน "+bulk.ids.length+" รายการ":""}>
+      {bulk && <div>
+        {bulk.skipped>0 && <div style={{fontSize:13,color:SUB,marginBottom:10}}>ข้าม {bulk.skipped} รายการที่ “แก้ผ่านแล้ว”</div>}
+        <Field label="ภาระงาน / สิ่งที่ต้องทำเพื่อแก้"><textarea style={{...inputStyle,minHeight:80,resize:"vertical"}} value={bulk.task} onChange={e=>setBulk({...bulk,task:e.target.value})} placeholder="เช่น ส่งใบงานที่ 1-5 และสอบแก้ตัว"/></Field>
+        <Field label="วันครบกำหนดส่ง"><input type="date" style={inputStyle} value={bulk.dueDate} onChange={e=>setBulk({...bulk,dueDate:e.target.value})}/></Field>
+        <label style={{display:"flex",gap:8,alignItems:"center",fontSize:14,marginBottom:14,cursor:"pointer"}}><input type="checkbox" checked={bulk.markAssigned} onChange={e=>setBulk({...bulk,markAssigned:e.target.checked})} style={{width:18,height:18}}/>เปลี่ยนสถานะเป็น “มอบแล้ว” (เฉพาะที่ยังไม่มอบงาน)</label>
+        <Btn variant="accent" onClick={applyBulk} style={{width:"100%"}}><Save size={16}/>บันทึก</Btn>
+      </div>}
+    </Modal>
+
+    <Modal open={!!edit} onClose={()=>setEdit(null)} title="รายละเอียดงานแก้">
+      {edit && (()=>{ const x=fixes.find(y=>y.id===edit.id)||{}; return <div>
+        <div style={{fontWeight:700,color:C.navy}}>{x.studentName} <span style={{color:SUB,fontWeight:500}}>({x.grade})</span></div>
+        <div style={{fontSize:13,color:SUB,marginBottom:14}}>{x.subjectCode} {x.subjectName} · {x.term}</div>
+        <Field label="ภาระงาน"><textarea style={{...inputStyle,minHeight:70,resize:"vertical"}} value={edit.task} onChange={e=>setEdit({...edit,task:e.target.value})}/></Field>
+        <Field label="วันครบกำหนดส่ง"><input type="date" style={inputStyle} value={edit.dueDate} onChange={e=>setEdit({...edit,dueDate:e.target.value})}/></Field>
+        <Field label="สถานะ"><select style={inputStyle} value={edit.status} onChange={e=>setEdit({...edit,status:e.target.value})}>{FIX_STATUS.map(o=><option key={o.v} value={o.v}>{o.label}</option>)}</select></Field>
+        <Field label="ผลการเรียนใหม่ (ถ้ามี)"><input style={inputStyle} value={edit.newResult} onChange={e=>setEdit({...edit,newResult:e.target.value})} placeholder="เช่น 1.5"/></Field>
+        <Field label="หมายเหตุ"><input style={inputStyle} value={edit.note} onChange={e=>setEdit({...edit,note:e.target.value})}/></Field>
+        <Btn variant="primary" onClick={saveEdit} style={{width:"100%"}}><Save size={16}/>บันทึก</Btn>
+      </div>; })()}
+    </Modal>
+  </div>;
+}
+
 function SettingsView({subjects,students,setStudents,logoUrl,setLogoUrl}){
   const persist=usePersist();
   const [target,setTarget]=useState((subjects[0]&&subjects[0].id)||"");
