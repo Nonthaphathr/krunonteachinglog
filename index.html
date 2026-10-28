@@ -353,6 +353,52 @@ function App(){
   const [view,setView]=useState("home");
   const [activeSubj,setActiveSubj]=useState(null);
   const persist = useMemo(()=>makePersist(),[]);
+  const [loadedSubj,setLoadedSubj]=useState({});     // วิชาที่โหลดข้อมูลแล้ว
+  const [subjErr,setSubjErr]=useState("");
+  const loadingRef=useRef({}), rosterRef=useRef(null), subjectsRef=useRef([]), dataRef=useRef({});
+  subjectsRef.current=subjects;
+  dataRef.current={students,attendance,assignments,scores,notes,qinfo};   // ค่าล่าสุดสำหรับฟังก์ชันที่รอโหลดข้อมูลแล้วค่อยใช้
+
+  /* โหลดข้อมูลของ 1 วิชา (ครั้งเดียวต่อวิชาต่อการเปิดเว็บ) */
+  const ensureSubject=(id)=>{
+    if(!FB||!id) return Promise.resolve();
+    if(loadingRef.current[id]) return loadingRef.current[id];
+    const q=(n)=>db.collection(n).where("subjectId","==",id).get();
+    const FP=firebase.firestore.FieldPath;
+    const pr=(async()=>{
+      const [stu,att,asg,sco,note,qi]=await Promise.all([q("students"),q("attendance"),q("assignments"),q("scores"),q("notes"),
+        db.collection("qinfo").where(FP.documentId(),">=",id+"_").where(FP.documentId(),"<",id+"_\uf8ff").get().catch(()=>null)]);
+      const stuList=stu.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.number||0)-(b.number||0));
+      setStudents(p=>({...p,[id]:stuList}));
+      const attObj={}; att.docs.forEach(d=>{ const x=d.data(); attObj[x.date]=x.marks||{}; }); setAttendance(p=>({...p,[id]:attObj}));
+      setAssignments(p=>({...p,[id]:asg.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.order||0)-(b.order||0))}));
+      const scoObj={}; sco.docs.forEach(d=>{ const x=d.data(); scoObj[x.studentId]=x.values||{}; }); setScores(p=>({...p,[id]:scoObj}));
+      setNotes(p=>({...p,[id]:note.docs.map(d=>({id:d.id,...d.data()}))}));
+      if(qi){ const o={}; qi.docs.forEach(d=>{ o[d.id]=d.data(); }); setQinfo(p=>({...p,...o})); }
+      setLoadedSubj(p=>({...p,[id]:true}));
+      syncCount(id,stuList.length);
+    })();
+    loadingRef.current[id]=pr;
+    pr.catch(e=>{ console.error("โหลดรายวิชาไม่ได้",e); delete loadingRef.current[id]; setSubjErr(String(e&&e.message||e)); });
+    return pr;
+  };
+  const ensureSubjects=(ids)=>Promise.all(ids.map(ensureSubject));
+  const ensureAll=()=>ensureSubjects(subjectsRef.current.map(s=>s.id));
+  /* วิชาที่สร้าง/นำเข้าใหม่ไม่ต้องไปโหลดซ้ำ */
+  const markLoaded=(ids)=>{ ids.forEach(id=>{ loadingRef.current[id]=Promise.resolve(); }); setLoadedSubj(p=>{ const n={...p}; ids.forEach(id=>{ n[id]=true; }); return n; }); };
+  const resetLoaded=()=>{ loadingRef.current={}; setLoadedSubj({}); };
+  /* จำนวนนักเรียนเก็บไว้ที่เอกสารวิชา เพื่อให้หน้าแรกแสดงได้โดยไม่ต้องโหลดรายชื่อ */
+  const syncCount=(id,n)=>{
+    const cur=subjectsRef.current.find(x=>x.id===id); if(!cur||cur.studentCount===n) return;
+    setSubjects(p=>p.map(x=>x.id===id?{...x,studentCount:n}:x));
+    if(FB) db.collection("subjects").doc(id).set({studentCount:n},{merge:true}).catch(e=>console.warn("บันทึกจำนวนนักเรียนไม่ได้",e));
+  };
+  /* รายชื่อกลาง (roster) โหลดเมื่อต้องใช้ (หน้าตั้งค่า/นำเข้า) */
+  const ensureRosters=()=>{
+    if(!FB) return Promise.resolve();
+    if(!rosterRef.current) rosterRef.current=db.collection("roster").get().then(rs=>{ const o={}; rs.docs.forEach(d=>{ o[d.id]=d.data(); }); setRosters(p=>({...o,...p})); }).catch(e=>{ rosterRef.current=null; console.warn("โหลดรายชื่อกลางไม่ได้",e); });
+    return rosterRef.current;
+  };
 
   // โหลดข้อมูลครั้งแรกจาก Firestore
   useEffect(()=>{
@@ -366,25 +412,14 @@ function App(){
         setLoading(false); return;
       }
       try{
-        const [sub,stu,att,asg,sco,note,setDoc]=await Promise.all([
-          db.collection("subjects").get(),db.collection("students").get(),
-          db.collection("attendance").get(),db.collection("assignments").get(),
-          db.collection("scores").get(),db.collection("notes").get(),
+        /* เริ่มต้นโหลดเฉพาะรายวิชา + ตั้งค่า — ข้อมูลของแต่ละวิชา (นักเรียน/เช็คชื่อ/คะแนน/ภาระงาน/โน้ต/Q-Info) โหลดตอนเปิดวิชานั้น เพื่อประหยัดโควตา Firestore */
+        const [sub,setDoc]=await Promise.all([
+          db.collection("subjects").get(),
           db.collection("settings").doc("app").get(),
         ]);
         if(!alive) return;
         setSubjects(sub.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)));
-        const stuObj={}; stu.docs.forEach(d=>{const x={id:d.id,...d.data()}; (stuObj[x.subjectId]=stuObj[x.subjectId]||[]).push(x);});
-        Object.keys(stuObj).forEach(k=>stuObj[k].sort((a,b)=>(a.number||0)-(b.number||0))); setStudents(stuObj);
-        const attObj={}; att.docs.forEach(d=>{const x=d.data(); attObj[x.subjectId]=attObj[x.subjectId]||{}; attObj[x.subjectId][x.date]=x.marks||{};}); setAttendance(attObj);
-        const asgObj={}; asg.docs.forEach(d=>{const x={id:d.id,...d.data()}; (asgObj[x.subjectId]=asgObj[x.subjectId]||[]).push(x);});
-        Object.keys(asgObj).forEach(k=>asgObj[k].sort((a,b)=>(a.order||0)-(b.order||0))); setAssignments(asgObj);
-        const scoObj={}; sco.docs.forEach(d=>{const x=d.data(); scoObj[x.subjectId]=scoObj[x.subjectId]||{}; scoObj[x.subjectId][x.studentId]=x.values||{};}); setScores(scoObj);
-        const noteObj={}; note.docs.forEach(d=>{const x={id:d.id,...d.data()}; (noteObj[x.subjectId]=noteObj[x.subjectId]||[]).push(x);}); setNotes(noteObj);
         if(setDoc.exists) setLogoUrl(setDoc.data().logoUrl||"");
-        // Q-Info mapping (แยกโหลด — ถ้าพังจะไม่กระทบข้อมูลส่วนอื่น)
-        try{ const qi=await db.collection("qinfo").get(); const qiObj={}; qi.docs.forEach(d=>qiObj[d.id]=d.data()); if(alive) setQinfo(qiObj); }
-        catch(e){ console.warn("โหลด qinfo ไม่ได้",e); }
         // งานแก้ 0 ร มส (แยกโหลด — ถ้า Rules ยังไม่อนุญาตจะไม่กระทบข้อมูลส่วนอื่น)
         try{ const fx=await db.collection("fixes").get(); if(alive) setFixes(fx.docs.map(d=>({id:d.id,...d.data()}))); }
         catch(e){ console.warn("โหลด fixes ไม่ได้",e); }
@@ -394,8 +429,6 @@ function App(){
         catch(e){ console.warn("โหลดข้อความโน้ตสำเร็จรูปไม่ได้",e); }
         try{ const tm=await db.collection("settings").doc("term").get(); if(tm.exists){ const d=tm.data(); GAS.url=d.gasUrl||""; GAS.key=d.gasKey||""; if(alive) setTerm({semester:d.semester||"",gasUrl:d.gasUrl||"",gasKey:d.gasKey||""}); } }
         catch(e){ console.warn("โหลดค่าภาคเรียนไม่ได้",e); }
-        try{ const rs=await db.collection("roster").get(); const o={}; rs.docs.forEach(d=>o[d.id]=d.data()); if(alive) setRosters(o); }
-        catch(e){ console.warn("โหลดรายชื่อกลางไม่ได้",e); }
       }catch(e){ console.error("โหลดข้อมูลล้มเหลว:",e); }
       if(alive) setLoading(false);
     }
@@ -405,7 +438,8 @@ function App(){
   useEffect(()=>{ if(!logoUrl) return; const l=document.getElementById("favicon"); if(l) l.href=logoUrl; },[logoUrl]);
 
   const subj = subjects.find(s=>s.id===activeSubj);
-  const openSubject=(id)=>{ setActiveSubj(id); setView("class"); };
+  const openSubject=(id)=>{ setActiveSubj(id); setView("class"); setSubjErr(""); ensureSubject(id).catch(()=>{}); };
+  const subjReady=!FB||!subj||!!loadedSubj[subj.id];
 
   if(loading) return <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",color:SUB,gap:14}}>
     <div className="spin" style={{color:C.accent}}><Cloud size={40}/></div><div>กำลังโหลดข้อมูล...</div></div>;
@@ -426,23 +460,26 @@ function App(){
     </header>
     {!FB && <div style={{background:"#fbf4e0",color:"#8a6d1b",fontSize:13,textAlign:"center",padding:"7px 12px"}}>โหมดทดลอง (ยังไม่ได้ต่อ Firestore) — ข้อมูลจะไม่ถูกบันทึก เมื่อ deploy บน GitHub Pages จะบันทึกอัตโนมัติ</div>}
     <main style={{maxWidth:920,margin:"0 auto",padding:16,paddingBottom:60}}>
-      {view==="home" && <HomeView subjects={subjects} setSubjects={setSubjects} openSubject={openSubject} students={students} setStudents={setStudents} fixes={fixes} openFix={()=>setView("fix")} term={term}/>}
+      {view==="home" && <HomeView subjects={subjects} setSubjects={setSubjects} openSubject={openSubject} students={students} setStudents={setStudents} fixes={fixes} openFix={()=>setView("fix")} term={term} markLoaded={markLoaded}/>}
       {view==="fix" && <FixView fixes={fixes} setFixes={setFixes} taskPresets={taskPresets} setTaskPresets={setTaskPresets}/>}
-      {view==="class" && subj && <ClassView subj={subj} setView={setView} students={students[subj.id]||[]}/>}
-      {view==="attendance" && subj && <AttendanceView subj={subj} students={students[subj.id]||[]} attendance={attendance} setAttendance={setAttendance}/>}
-      {view==="scores" && subj && <ScoresView subj={subj} setView={setView} students={students[subj.id]||[]} assignments={assignments} setAssignments={setAssignments} scores={scores} setScores={setScores}/>}
-      {view==="notes" && subj && <NotesView subj={subj} notes={notes} setNotes={setNotes} notePresets={notePresets} setNotePresets={setNotePresets} term={term}/>}
-      {view==="pending" && subj && <PendingView subj={subj} students={(students[subj.id]||[]).filter(isNormalStu)} assignments={assignments} scores={scores} logoUrl={logoUrl}/>}
-      {view==="qinfo" && subj && <QinfoView subj={subj} students={students[subj.id]||[]} assignments={assignments} scores={scores} qinfo={qinfo} setQinfo={setQinfo}/>}
+      {["class","attendance","scores","notes","pending","qinfo"].includes(view) && subj && !subjReady && <div style={{...panel,textAlign:"center",color:SUB,padding:30}}>
+        {subjErr?<div><div style={{color:"#c0392b",fontWeight:700,marginBottom:6}}>โหลดข้อมูลวิชานี้ไม่สำเร็จ</div><div style={{fontSize:13,marginBottom:10}}>{subjErr}</div><Btn variant="primary" onClick={()=>{ setSubjErr(""); ensureSubject(subj.id).catch(()=>{}); }}>ลองอีกครั้ง</Btn></div>
+        :<div><div className="spin" style={{color:C.accent,display:"inline-block"}}><Cloud size={30}/></div><div style={{marginTop:8}}>กำลังโหลดข้อมูลวิชา {subj.name}…</div></div>}</div>}
+      {subjReady && view==="class" && subj && <ClassView subj={subj} setView={setView} students={students[subj.id]||[]}/>}
+      {subjReady && view==="attendance" && subj && <AttendanceView subj={subj} students={students[subj.id]||[]} attendance={attendance} setAttendance={setAttendance}/>}
+      {subjReady && view==="scores" && subj && <ScoresView subj={subj} setView={setView} students={students[subj.id]||[]} assignments={assignments} setAssignments={setAssignments} scores={scores} setScores={setScores}/>}
+      {subjReady && view==="notes" && subj && <NotesView subj={subj} notes={notes} setNotes={setNotes} notePresets={notePresets} setNotePresets={setNotePresets} term={term}/>}
+      {subjReady && view==="pending" && subj && <PendingView subj={subj} students={(students[subj.id]||[]).filter(isNormalStu)} assignments={assignments} scores={scores} logoUrl={logoUrl}/>}
+      {subjReady && view==="qinfo" && subj && <QinfoView subj={subj} students={students[subj.id]||[]} assignments={assignments} scores={scores} qinfo={qinfo} setQinfo={setQinfo}/>}
       {view==="settings" && <SettingsView subjects={subjects} students={students} setStudents={setStudents} logoUrl={logoUrl} setLogoUrl={setLogoUrl}
-        app={{subjects,setSubjects,students,setStudents,attendance,setAttendance,assignments,setAssignments,scores,setScores,notes,setNotes,qinfo,setQinfo,fixes,setFixes,term,setTerm,rosters,setRosters}}/>}
+        app={{subjects,setSubjects,students,setStudents,attendance,setAttendance,assignments,setAssignments,scores,setScores,notes,setNotes,qinfo,setQinfo,fixes,setFixes,term,setTerm,rosters,setRosters,loadedSubj,ensureSubject,ensureSubjects,ensureAll,ensureRosters,markLoaded,resetLoaded,syncCount,dataRef}}/>}
     </main>
   </div>
   </PersistCtx.Provider>;
 }
 
 /* ---------- HOME ---------- */
-function HomeView({subjects,setSubjects,openSubject,students,setStudents,fixes,openFix,term}){
+function HomeView({subjects,setSubjects,openSubject,students,setStudents,fixes,openFix,term,markLoaded}){
   const persist=usePersist();
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({name:"",code:"",room:"",color:CARD_COLORS[0],days:[],period:"",credits:""});
@@ -451,8 +488,8 @@ function HomeView({subjects,setSubjects,openSubject,students,setStudents,fixes,o
   const save=()=>{
     if(!form.name.trim()) return;
     const sem=(term&&term.semester)||"";
-    if(modal.mode==="add"){ const id=uid(); const rec={...form,id,createdAt:Date.now(),semester:form.semester||sem};
-      setSubjects([...subjects,rec]); setStudents(p=>({...p,[id]:[]})); persist.addSubject(rec); gasPost("upsertSubjects",{semester:sem,subjects:[gasSubject(rec,sem)]});
+    if(modal.mode==="add"){ const id=uid(); const rec={...form,id,createdAt:Date.now(),semester:form.semester||sem,studentCount:0};
+      markLoaded&&markLoaded([id]); setSubjects([...subjects,rec]); setStudents(p=>({...p,[id]:[]})); persist.addSubject(rec); gasPost("upsertSubjects",{semester:sem,subjects:[gasSubject(rec,sem)]});
     } else { setSubjects(subjects.map(s=>s.id===modal.id?{...s,...form}:s)); persist.updateSubject(modal.id,form); gasPost("upsertSubjects",{semester:sem,subjects:[gasSubject({...form,id:modal.id},sem)]}); }
     setModal(null);
   };
@@ -480,7 +517,7 @@ function HomeView({subjects,setSubjects,openSubject,students,setStudents,fixes,o
           <div style={{padding:"14px 16px"}}>
             <div style={{fontSize:12,color:SUB,fontWeight:600}}>{s.code||"—"}</div>
             <div style={{fontSize:17,fontWeight:700,color:C.navy,margin:"2px 0 6px"}}>{s.name}</div>
-            <div style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:13,color:SUB,background:C.navySoft,padding:"3px 9px",borderRadius:20}}>ห้อง {s.room||"—"} · {(students[s.id]||[]).length} คน</div>
+            <div style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:13,color:SUB,background:C.navySoft,padding:"3px 9px",borderRadius:20}}>ห้อง {s.room||"—"} · {s.studentCount!=null?s.studentCount:(students[s.id]?students[s.id].length:"—")} คน</div>
             {((s.days&&s.days.length)||s.period||s.credits!=="" && s.credits!=null) ? <div style={{fontSize:12.5,color:SUB,marginTop:6}}>{(s.days||[]).length?"สอน "+s.days.join(","):""}{s.period?" · "+s.period:""}{s.credits!==""&&s.credits!=null?" · "+s.credits+" นก.":""}</div> : null}
           </div>
         </div>
@@ -1909,6 +1946,7 @@ function TermPanels({app}){
   const [imp,setImp]=useState(null), [ros,setRos]=useState(null), [clr,setClr]=useState(null);
   const subjRef=useRef(), rosRef=useRef();
   useEffect(()=>{ setCfg({semester:term.semester||"",gasUrl:term.gasUrl||"",gasKey:term.gasKey||""}); },[term]);
+  useEffect(()=>{ app.ensureRosters(); },[]);
   const save=async(p)=>{ try{ await p; return true; }catch(e){ console.error(e); alert("บันทึกลงฐานข้อมูลไม่สำเร็จ: "+(e.message||e)); return false; } };
 
   /* --- ภาคเรียน + เชื่อม Google Sheet --- */
@@ -1918,8 +1956,9 @@ function TermPanels({app}){
     const r=await gasPost("ping",{});
     setMsg(r.skipped?"ยังไม่ได้ใส่ลิงก์ Web App":r.ok?(r.unverified?"ส่งคำขอแล้ว แต่เบราว์เซอร์อ่านผลตอบกลับไม่ได้ — ตรวจที่ชีตแท็บ Log ว่ามีรายการ ping":"เชื่อมต่อสำเร็จ ✔"):(r.data&&r.data.error==="unauthorized"?"รหัสลับ (SECRET) ไม่ตรงกับในสคริปต์":"เชื่อมต่อไม่สำเร็จ")); };
   const syncAll=async()=>{ setBusy(true); setMsg("กำลังส่งข้อมูลทั้งหมดขึ้น Google Sheet…");
+    try{ await app.ensureAll(); await new Promise(r=>setTimeout(r,80)); }catch(e){ setBusy(false); setMsg("โหลดข้อมูลบางวิชาไม่สำเร็จ ลองอีกครั้ง"); return; }
     const r1=await gasPost("upsertSubjects",{semester:term.semester,replace:true,subjects:subjects.map(s=>gasSubject(s,term.semester))});
-    const all=[]; subjects.forEach(s=>(app.notes[s.id]||[]).forEach(n=>all.push(gasNote(n,s,term.semester))));
+    const all=[]; subjects.forEach(s=>(app.dataRef.current.notes[s.id]||[]).forEach(n=>all.push(gasNote(n,s,term.semester))));
     let okN=true; for(let i=0;i<all.length;i+=100){ const r=await gasPost("upsertNotes",{notes:all.slice(i,i+100)}); if(!r.ok) okN=false; }
     setBusy(false); setMsg(r1.ok&&okN?"ส่งแล้ว: "+subjects.length+" วิชา, "+all.length+" บันทึก":"ส่งไม่สำเร็จบางส่วน (ดู Console)"); };
 
@@ -1936,6 +1975,7 @@ function TermPanels({app}){
       else created.push({id:uid(),code:it.code,name:it.name||it.code,room:it.room,days:it.days,period:it.period,credits:it.credits,semester:sem,color:CARD_COLORS[(subjects.length+created.length)%CARD_COLORS.length],createdAt:now+i}); });
     const writes=[...updated,...created];
     const merged=(()=>{ const m=new Map(subjects.map(s=>[s.id,s])); writes.forEach(s=>m.set(s.id,s)); return [...m.values()].sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)); })();
+    await app.ensureRosters();
     await save(persist.setSubjects(writes));
     setSubjects(merged);
     /* วิชาใหม่ที่ห้องตรงกับรายชื่อกลาง (roster) → ใส่รายชื่อให้อัตโนมัติ */
@@ -1943,6 +1983,8 @@ function TermPanels({app}){
     for(const s of created){ const r=rosters[roomKey(s.room)]; if(r&&r.students&&r.students.length){
       const list=r.students.map(x=>({id:uid(),number:x.number,name:x.name,studentId:x.studentId||"",status:"normal"}));
       stu[s.id]=list; filled++; await save(persist.upsertStudents(s.id,list)); } }
+    app.markLoaded(created.map(s=>s.id));
+    created.forEach(s=>{ app.syncCount(s.id,(stu[s.id]||[]).length); });
     setStudents(stu);
     if(sem&&sem!==term.semester){ const t={...term,semester:sem}; setTerm(t); await save(persist.setTerm({semester:sem})); }
     await gasPost("upsertSubjects",{semester:sem||term.semester,replace:true,subjects:merged.map(s=>gasSubject(s,sem||term.semester))});
@@ -1957,7 +1999,10 @@ function TermPanels({app}){
     catch(err){ alert("อ่านไฟล์ไม่สำเร็จ: "+err.message); } };
   const doRoster=async()=>{ setBusy(true);
     const {groups}=buildRosterGroups(ros.rows,ros.fallback,ros.level), now=Date.now();
-    const newRosters={...rosters}, stu={...students}; let added=0, upd=0, nSub=0;
+    /* ต้องโหลดรายชื่อเดิมของวิชาที่ห้องตรงกันก่อน เพื่อจับคู่/อัปเดต ไม่ให้เกิดชื่อซ้ำ */
+    const targetIds=subjects.filter(x=>groups.some(g=>nameKey(g.room)===nameKey(x.room))).map(x=>x.id);
+    try{ await app.ensureSubjects(targetIds); }catch(e){ setBusy(false); alert("โหลดรายชื่อเดิมของบางวิชาไม่สำเร็จ ลองอีกครั้ง"); return; }
+    const newRosters={...rosters}, stu={...app.dataRef.current.students}; let added=0, upd=0, nSub=0;
     for(const g of groups){ const key=roomKey(g.room), doc={room:g.room,level:roomLevel(g.room),students:g.students,updatedAt:now};
       newRosters[key]=doc; await save(persist.setRoster(key,doc));
       for(const s of subjects.filter(x=>nameKey(x.room)===nameKey(g.room))){
@@ -1966,7 +2011,7 @@ function TermPanels({app}){
         g.students.forEach(st=>{ const ex=(st.studentId&&byId.get(String(st.studentId)))||byName.get(nameKey(st.name));
           if(ex){ const u={...ex,number:st.number,name:st.name,studentId:st.studentId||ex.studentId||""}; writes.push(u); next[next.findIndex(x=>x.id===ex.id)]=u; upd++; }
           else { const nw={id:uid(),number:st.number,name:st.name,studentId:st.studentId||"",status:"normal"}; writes.push(nw); next.push(nw); added++; } });
-        next.sort((a,b)=>(a.number||0)-(b.number||0)); stu[s.id]=next; nSub++;
+        next.sort((a,b)=>(a.number||0)-(b.number||0)); stu[s.id]=next; nSub++; app.syncCount(s.id,next.length);
         await save(persist.upsertStudents(s.id,writes)); } }
     setRosters(newRosters); setStudents(stu); setBusy(false); setRos(null);
     setMsg("นำเข้ารายชื่อแล้ว "+groups.length+" ห้อง ("+groups.reduce((a,g)=>a+g.students.length,0)+" คน) · เติมเข้า "+nSub+" วิชา (เพิ่มใหม่ "+added+" · อัปเดต "+upd+" คน)"); };
@@ -1974,11 +2019,11 @@ function TermPanels({app}){
   /* --- ล้างข้อมูลรายวิชาทั้งหมด --- */
   const openClear=()=>setClr({text:"",backup:true,roster:false,fixes:false,gas:!!GAS.url,nextSem:nextSemester(term.semester)});
   const doClear=async()=>{ setBusy(true);
-    if(clr.backup){ try{ downloadBackup(app,(term.semester||"").replace("/","-")); }
+    if(clr.backup){ try{ await app.ensureAll(); await new Promise(r=>setTimeout(r,80)); downloadBackup({...app,...app.dataRef.current},(term.semester||"").replace("/","-")); }
       catch(e){ console.error(e); if(!window.confirm("สร้างไฟล์สำรองไม่สำเร็จ ต้องการล้างต่อโดยไม่สำรองหรือไม่?")){ setBusy(false); return; } } }
     const names=["subjects","students","attendance","assignments","scores","notes","qinfo"]; if(clr.fixes) names.push("fixes"); if(clr.roster) names.push("roster");
     if(!(await save(persist.clearCollections(names)))){ setBusy(false); return; }
-    setSubjects([]); setStudents({}); app.setAttendance({}); app.setAssignments({}); app.setScores({}); app.setNotes({}); app.setQinfo({});
+    setSubjects([]); setStudents({}); app.setAttendance({}); app.setAssignments({}); app.setScores({}); app.setNotes({}); app.setQinfo({}); app.resetLoaded();
     if(clr.fixes) app.setFixes([]); if(clr.roster) setRosters({});
     const sem=clr.nextSem.trim(); if(sem){ setTerm({...term,semester:sem}); await save(persist.setTerm({semester:sem})); }
     if(clr.gas) await gasPost("resetTerm",{semester:sem});
@@ -2080,15 +2125,17 @@ function SettingsView({subjects,students,setStudents,logoUrl,setLogoUrl,app}){
   const [logoInput,setLogoInput]=useState(logoUrl);
   const fileRef=useRef();
   useEffect(()=>{ if(!target && subjects[0]) setTarget(subjects[0].id); },[subjects]);
+  useEffect(()=>{ if(target) app.ensureSubject(target).catch(()=>{}); },[target]);
+  const targetReady=!FB||!!app.loadedSubj[target];
   const parseNames=(text)=>text.split("\n").map(l=>l.trim()).filter(Boolean).map((line,i)=>{
     const m=line.split(/[,\t]/).map(x=>x.trim());
     if(m.length>=2 && /^\d+$/.test(m[0])) return {id:uid(),number:Number(m[0]),name:m.slice(1).join(" ")};
     return {id:uid(),number:i+1,name:line};
   });
-  const importPaste=()=>{ if(!target) return alert("ยังไม่มีรายวิชา");
+  const importPaste=()=>{ if(!target) return alert("ยังไม่มีรายวิชา"); if(!targetReady) return alert("กำลังโหลดรายชื่อเดิมของวิชานี้ ลองใหม่อีกครั้ง");
     const parsed=parseNames(pasteText); if(!parsed.length) return;
-    setStudents(p=>({...p,[target]:parsed})); persist.replaceStudents(target,parsed); setPasteText(""); alert("นำเข้า "+parsed.length+" รายชื่อสำเร็จ"); };
-  const importFile=(e)=>{ const file=e.target.files[0]; if(!file||!target) return;
+    setStudents(p=>({...p,[target]:parsed})); persist.replaceStudents(target,parsed); app.syncCount(target,parsed.length); setPasteText(""); alert("นำเข้า "+parsed.length+" รายชื่อสำเร็จ"); };
+  const importFile=(e)=>{ const file=e.target.files[0]; if(!file||!target) return; if(!targetReady){ e.target.value=""; return alert("กำลังโหลดรายชื่อเดิมของวิชานี้ ลองใหม่อีกครั้ง"); }
     const reader=new FileReader();
     reader.onload=(ev)=>{ const wb=XLSX.read(new Uint8Array(ev.target.result),{type:"array"});
       const ws=wb.Sheets[wb.SheetNames[0]]; const rows=XLSX.utils.sheet_to_json(ws,{header:1}); const parsed=[];
@@ -2096,12 +2143,12 @@ function SettingsView({subjects,students,setStudents,logoUrl,setLogoUrl,app}){
         if(i===0 && !/^\d+$/.test(first)) return;
         if(/^\d+$/.test(first) && r[1]) parsed.push({id:uid(),number:Number(first),name:String(r[1]).trim()});
         else if(first) parsed.push({id:uid(),number:parsed.length+1,name:first}); });
-      if(parsed.length){ setStudents(p=>({...p,[target]:parsed})); persist.replaceStudents(target,parsed); alert("นำเข้าจากไฟล์ "+parsed.length+" รายชื่อสำเร็จ"); }
+      if(parsed.length){ setStudents(p=>({...p,[target]:parsed})); persist.replaceStudents(target,parsed); app.syncCount(target,parsed.length); alert("นำเข้าจากไฟล์ "+parsed.length+" รายชื่อสำเร็จ"); }
       else alert("ไม่พบข้อมูลในไฟล์"); };
     reader.readAsArrayBuffer(file); e.target.value=""; };
   const currentList=students[target]||[];
   const setStuStatus=(id,status)=>{ setStudents(p=>({...p,[target]:(p[target]||[]).map(s=>s.id===id?{...s,status}:s)})); persist.setStudentStatus(id,status); };
-  const removeStudent=(id)=>{ setStudents(p=>({...p,[target]:(p[target]||[]).filter(s=>s.id!==id)})); persist.deleteStudent(id); };
+  const removeStudent=(id)=>{ setStudents(p=>({...p,[target]:(p[target]||[]).filter(s=>s.id!==id)})); persist.deleteStudent(id); app.syncCount(target,Math.max(0,currentList.length-1)); };
   return <div style={{display:"grid",gap:14}}>
     <h2 style={{margin:0,fontSize:19,color:C.navy}}>ตั้งค่าระบบ</h2>
     <TermPanels app={app}/>
