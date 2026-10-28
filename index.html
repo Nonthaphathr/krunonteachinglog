@@ -164,6 +164,44 @@ function thaiToNumber(val){
   return n==null?val:String(n);
 }
 
+/* ---------- ตารางสอน / ห้องเรียน / เชื่อม Google Sheet (GAS) ---------- */
+const DAYS=["จ","อ","พ","พฤ","ศ","ส","อา"];
+const DAY_TOKENS=[["พฤหัสบดี","พฤ"],["พฤหัส","พฤ"],["อาทิตย์","อา"],["จันทร์","จ"],["อังคาร","อ"],["พุธ","พ"],["ศุกร์","ศ"],["เสาร์","ส"],["พฤ","พฤ"],["อา","อา"],["จ","จ"],["อ","อ"],["พ","พ"],["ศ","ศ"],["ส","ส"]];
+/* "จ,พ" / "จันทร์ พุธ" / "จ/พฤ" → ["จ","พ"] (เรียงตามวันในสัปดาห์) */
+function parseDays(v){
+  const s=String(v==null?"":v), out=new Set(); let i=0;
+  while(i<s.length){ let hit=null;
+    for(const [w,c] of DAY_TOKENS){ if(s.startsWith(w,i)){ hit=[w,c]; break; } }
+    if(hit){ out.add(hit[1]); i+=hit[0].length; } else i++; }
+  return DAYS.filter(d=>out.has(d));
+}
+/* "ม.1/1" "1/1" "ม.๑/๑" "มัธยมศึกษาปีที่ 1/2" → "ม.1/1"  (strict=ต้องมีคำว่า ม. นำหน้า ใช้กับชื่อชีต/ชื่อไฟล์) */
+function normRoom(v,strict){
+  let s=String(v==null?"":v).trim(); if(!s) return "";
+  s=s.replace(/[๐-๙]/g,d=>"๐๑๒๓๔๕๖๗๘๙".indexOf(d));
+  const re=strict?/ม(?:ัธยมศึกษาปีที่)?\.?\s*([1-6])(?:\s*[\/\-.]\s*(\d{1,2}))?/:/^(?:ม(?:ัธยมศึกษาปีที่)?\.?\s*)?([1-6])(?:\s*[\/\-.]\s*(\d{1,2}))?\s*$/;
+  const m=s.match(re); if(!m) return "";
+  return "ม."+m[1]+(m[2]?"/"+m[2]:"");
+}
+const roomLevel=(r)=>{ const m=String(r||"").match(/ม\.([1-6])/); return m?"ม."+m[1]:""; };
+const roomKey=(r)=>"r_"+String(r||"").replace(/[\/\s]/g,"-");
+const nameKey=(s)=>String(s==null?"":s).replace(/\s+/g,"");
+function nextSemester(s){ const m=String(s||"").match(/([12])\s*\/\s*(\d{4})/); if(!m) return ""; return m[1]==="1"?"2/"+m[2]:"1/"+(+m[2]+1); }
+
+/* เรียก Google Apps Script (Web App) — ซิงก์วิชา/บันทึกช่วยจำขึ้น Google Sheet
+   ส่งเป็น text/plain เพื่อไม่ให้เกิด CORS preflight; ถ้าอ่านผลไม่ได้จะลองส่งแบบ no-cors (ทุก action เป็น upsert จึงส่งซ้ำได้ปลอดภัย) */
+const GAS={url:"",key:""};
+async function gasPost(action,payload){
+  if(!GAS.url) return {ok:false,skipped:true};
+  const body=JSON.stringify({key:GAS.key,action,...payload});
+  try{ const r=await fetch(GAS.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body}); const d=await r.json(); return {ok:!!d.ok,data:d}; }
+  catch(e){
+    try{ await fetch(GAS.url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body}); return {ok:true,unverified:true}; }
+    catch(e2){ console.warn("ซิงก์ Google Sheet ไม่สำเร็จ",e2); return {ok:false}; } }
+}
+const gasSubject=(s,sem)=>({id:s.id,semester:s.semester||sem||"",code:s.code||"",name:s.name||"",room:s.room||"",days:(s.days||[]).join(","),period:s.period||"",credits:s.credits==null?"":s.credits,color:s.color||""});
+const gasNote=(n,subj,sem)=>({id:n.id,subjectId:subj.id,subjectCode:subj.code||"",subjectName:subj.name||"",room:subj.room||"",semester:subj.semester||sem||"",date:n.date,text:n.text,updatedAt:n.updatedAt||Date.now()});
+
 /* ---------- ไอคอน (inline SVG) ---------- */
 function Ico({size=20,children,fill="none"}){
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor"
@@ -206,7 +244,8 @@ function makePersist(){
     return { addSubject:noop,updateSubject:noop,deleteSubject:noop,replaceStudents:noop,setStudentStatus:noop,
       deleteStudent:noop,setAttendanceDay:noop,addAssignment:noop,updateAssignment:noop,
       deleteAssignment:noop,setScoreDoc:noop,addNote:noop,updateNote:noop,deleteNote:noop,setLogo:noop,setQinfo:noop,
-      setFixes:noop,updateFixes:noop,deleteFixes:noop,setTaskPresets:noop };
+      setFixes:noop,updateFixes:noop,deleteFixes:noop,setTaskPresets:noop,
+      setSubjects:noop,setTerm:noop,setRoster:noop,upsertStudents:noop,clearCollections:noop,setNotePresets:noop };
   }
   const col = (n)=>db.collection(n);
   const writeChunks = async(items,fn)=>{ for(let i=0;i<items.length;i+=400){ const b=db.batch(); items.slice(i,i+400).forEach(it=>fn(b,it)); await b.commit(); } };
@@ -215,8 +254,14 @@ function makePersist(){
     await Promise.all(snap.docs.map(d=>d.ref.delete()));
   };
   return {
-    addSubject:(s)=>col("subjects").doc(s.id).set({name:s.name,code:s.code,room:s.room,color:s.color,createdAt:s.createdAt||Date.now()}),
-    updateSubject:(id,s)=>col("subjects").doc(id).set({name:s.name,code:s.code,room:s.room,color:s.color},{merge:true}),
+    addSubject:(s)=>col("subjects").doc(s.id).set({name:s.name,code:s.code,room:s.room,color:s.color,createdAt:s.createdAt||Date.now(),credits:s.credits==null?"":s.credits,days:s.days||[],period:s.period||"",semester:s.semester||""}),
+    updateSubject:(id,s)=>col("subjects").doc(id).set({name:s.name,code:s.code,room:s.room,color:s.color,credits:s.credits==null?"":s.credits,days:s.days||[],period:s.period||"",semester:s.semester||""},{merge:true}),
+    setSubjects:(list)=>writeChunks(list,(b,s)=>b.set(col("subjects").doc(s.id),{name:s.name,code:s.code,room:s.room,color:s.color,createdAt:s.createdAt||Date.now(),credits:s.credits==null?"":s.credits,days:s.days||[],period:s.period||"",semester:s.semester||""},{merge:true})),
+    setTerm:(d)=>col("settings").doc("term").set(d,{merge:true}),
+    setRoster:(key,d)=>col("roster").doc(key).set(d),
+    upsertStudents:(subjId,list)=>writeChunks(list,(b,x)=>b.set(col("students").doc(x.id),{subjectId:subjId,number:x.number,name:x.name,studentId:x.studentId||"",status:x.status||"normal"},{merge:true})),
+    clearCollections:async(names)=>{ for(const n of names){ const snap=await col(n).get(); await writeChunks(snap.docs,(b,d)=>b.delete(d.ref)); } },
+    setNotePresets:(list)=>col("settings").doc("noteTexts").set({list}),
     deleteSubject:async(id)=>{ await col("subjects").doc(id).delete();
       await Promise.all(["students","assignments","notes","attendance","scores","qinfo"].map(n=>deleteWhere(n,id))); },
     replaceStudents:async(subjId,list)=>{ await deleteWhere("students",subjId);
@@ -228,8 +273,8 @@ function makePersist(){
     updateAssignment:(id,a)=>col("assignments").doc(id).set({title:a.title,max:a.max},{merge:true}),
     deleteAssignment:(id)=>col("assignments").doc(id).delete(),
     setScoreDoc:(subjId,studentId,values)=>col("scores").doc(subjId+"_"+studentId).set({subjectId:subjId,studentId,values}),
-    addNote:(subjId,n)=>col("notes").doc(n.id).set({subjectId:subjId,date:n.date,text:n.text}),
-    updateNote:(id,n)=>col("notes").doc(id).set({date:n.date,text:n.text},{merge:true}),
+    addNote:(subjId,n)=>col("notes").doc(n.id).set({subjectId:subjId,date:n.date,text:n.text,updatedAt:n.updatedAt||Date.now()}),
+    updateNote:(id,n)=>col("notes").doc(id).set({date:n.date,text:n.text,updatedAt:n.updatedAt||Date.now()},{merge:true}),
     deleteNote:(id)=>col("notes").doc(id).delete(),
     setLogo:(url)=>col("settings").doc("app").set({logoUrl:url}),
     setQinfo:(docId,data)=>col("qinfo").doc(docId).set(data),
@@ -301,6 +346,9 @@ function App(){
   const [qinfo,setQinfo]=useState({});
   const [fixes,setFixes]=useState([]);
   const [taskPresets,setTaskPresets]=useState([]);
+  const [notePresets,setNotePresets]=useState([]);
+  const [term,setTerm]=useState({semester:"",gasUrl:"",gasKey:""});
+  const [rosters,setRosters]=useState({});
   const [loading,setLoading]=useState(true);
   const [view,setView]=useState("home");
   const [activeSubj,setActiveSubj]=useState(null);
@@ -342,6 +390,12 @@ function App(){
         catch(e){ console.warn("โหลด fixes ไม่ได้",e); }
         try{ const tp=await db.collection("settings").doc("fixTasks").get(); if(alive&&tp.exists) setTaskPresets(tp.data().list||[]); }
         catch(e){ console.warn("โหลดข้อความภาระงานสำเร็จรูปไม่ได้",e); }
+        try{ const tp=await db.collection("settings").doc("noteTexts").get(); if(alive&&tp.exists) setNotePresets(tp.data().list||[]); }
+        catch(e){ console.warn("โหลดข้อความโน้ตสำเร็จรูปไม่ได้",e); }
+        try{ const tm=await db.collection("settings").doc("term").get(); if(tm.exists){ const d=tm.data(); GAS.url=d.gasUrl||""; GAS.key=d.gasKey||""; if(alive) setTerm({semester:d.semester||"",gasUrl:d.gasUrl||"",gasKey:d.gasKey||""}); } }
+        catch(e){ console.warn("โหลดค่าภาคเรียนไม่ได้",e); }
+        try{ const rs=await db.collection("roster").get(); const o={}; rs.docs.forEach(d=>o[d.id]=d.data()); if(alive) setRosters(o); }
+        catch(e){ console.warn("โหลดรายชื่อกลางไม่ได้",e); }
       }catch(e){ console.error("โหลดข้อมูลล้มเหลว:",e); }
       if(alive) setLoading(false);
     }
@@ -372,32 +426,34 @@ function App(){
     </header>
     {!FB && <div style={{background:"#fbf4e0",color:"#8a6d1b",fontSize:13,textAlign:"center",padding:"7px 12px"}}>โหมดทดลอง (ยังไม่ได้ต่อ Firestore) — ข้อมูลจะไม่ถูกบันทึก เมื่อ deploy บน GitHub Pages จะบันทึกอัตโนมัติ</div>}
     <main style={{maxWidth:920,margin:"0 auto",padding:16,paddingBottom:60}}>
-      {view==="home" && <HomeView subjects={subjects} setSubjects={setSubjects} openSubject={openSubject} students={students} setStudents={setStudents} fixes={fixes} openFix={()=>setView("fix")}/>}
+      {view==="home" && <HomeView subjects={subjects} setSubjects={setSubjects} openSubject={openSubject} students={students} setStudents={setStudents} fixes={fixes} openFix={()=>setView("fix")} term={term}/>}
       {view==="fix" && <FixView fixes={fixes} setFixes={setFixes} taskPresets={taskPresets} setTaskPresets={setTaskPresets}/>}
       {view==="class" && subj && <ClassView subj={subj} setView={setView} students={students[subj.id]||[]}/>}
       {view==="attendance" && subj && <AttendanceView subj={subj} students={students[subj.id]||[]} attendance={attendance} setAttendance={setAttendance}/>}
       {view==="scores" && subj && <ScoresView subj={subj} setView={setView} students={students[subj.id]||[]} assignments={assignments} setAssignments={setAssignments} scores={scores} setScores={setScores}/>}
-      {view==="notes" && subj && <NotesView subj={subj} notes={notes} setNotes={setNotes}/>}
+      {view==="notes" && subj && <NotesView subj={subj} notes={notes} setNotes={setNotes} notePresets={notePresets} setNotePresets={setNotePresets} term={term}/>}
       {view==="pending" && subj && <PendingView subj={subj} students={(students[subj.id]||[]).filter(isNormalStu)} assignments={assignments} scores={scores} logoUrl={logoUrl}/>}
       {view==="qinfo" && subj && <QinfoView subj={subj} students={students[subj.id]||[]} assignments={assignments} scores={scores} qinfo={qinfo} setQinfo={setQinfo}/>}
-      {view==="settings" && <SettingsView subjects={subjects} students={students} setStudents={setStudents} logoUrl={logoUrl} setLogoUrl={setLogoUrl}/>}
+      {view==="settings" && <SettingsView subjects={subjects} students={students} setStudents={setStudents} logoUrl={logoUrl} setLogoUrl={setLogoUrl}
+        app={{subjects,setSubjects,students,setStudents,attendance,setAttendance,assignments,setAssignments,scores,setScores,notes,setNotes,qinfo,setQinfo,fixes,setFixes,term,setTerm,rosters,setRosters}}/>}
     </main>
   </div>
   </PersistCtx.Provider>;
 }
 
 /* ---------- HOME ---------- */
-function HomeView({subjects,setSubjects,openSubject,students,setStudents,fixes,openFix}){
+function HomeView({subjects,setSubjects,openSubject,students,setStudents,fixes,openFix,term}){
   const persist=usePersist();
   const [modal,setModal]=useState(null);
-  const [form,setForm]=useState({name:"",code:"",room:"",color:CARD_COLORS[0]});
-  const openAdd=()=>{ setForm({name:"",code:"",room:"",color:CARD_COLORS[subjects.length%CARD_COLORS.length]}); setModal({mode:"add"}); };
-  const openEdit=(s)=>{ setForm({...s}); setModal({mode:"edit",id:s.id}); };
+  const [form,setForm]=useState({name:"",code:"",room:"",color:CARD_COLORS[0],days:[],period:"",credits:""});
+  const openAdd=()=>{ setForm({name:"",code:"",room:"",color:CARD_COLORS[subjects.length%CARD_COLORS.length],days:[],period:"",credits:"",semester:(term&&term.semester)||""}); setModal({mode:"add"}); };
+  const openEdit=(s)=>{ setForm({days:[],period:"",credits:"",...s}); setModal({mode:"edit",id:s.id}); };
   const save=()=>{
     if(!form.name.trim()) return;
-    if(modal.mode==="add"){ const id=uid(); const rec={...form,id,createdAt:Date.now()};
-      setSubjects([...subjects,rec]); setStudents(p=>({...p,[id]:[]})); persist.addSubject(rec);
-    } else { setSubjects(subjects.map(s=>s.id===modal.id?{...s,...form}:s)); persist.updateSubject(modal.id,form); }
+    const sem=(term&&term.semester)||"";
+    if(modal.mode==="add"){ const id=uid(); const rec={...form,id,createdAt:Date.now(),semester:form.semester||sem};
+      setSubjects([...subjects,rec]); setStudents(p=>({...p,[id]:[]})); persist.addSubject(rec); gasPost("upsertSubjects",{semester:sem,subjects:[gasSubject(rec,sem)]});
+    } else { setSubjects(subjects.map(s=>s.id===modal.id?{...s,...form}:s)); persist.updateSubject(modal.id,form); gasPost("upsertSubjects",{semester:sem,subjects:[gasSubject({...form,id:modal.id},sem)]}); }
     setModal(null);
   };
   const remove=(id)=>{ if(!window.confirm("ลบรายวิชานี้และข้อมูลทั้งหมด?")) return;
@@ -425,6 +481,7 @@ function HomeView({subjects,setSubjects,openSubject,students,setStudents,fixes,o
             <div style={{fontSize:12,color:SUB,fontWeight:600}}>{s.code||"—"}</div>
             <div style={{fontSize:17,fontWeight:700,color:C.navy,margin:"2px 0 6px"}}>{s.name}</div>
             <div style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:13,color:SUB,background:C.navySoft,padding:"3px 9px",borderRadius:20}}>ห้อง {s.room||"—"} · {(students[s.id]||[]).length} คน</div>
+            {((s.days&&s.days.length)||s.period||s.credits!=="" && s.credits!=null) ? <div style={{fontSize:12.5,color:SUB,marginTop:6}}>{(s.days||[]).length?"สอน "+s.days.join(","):""}{s.period?" · "+s.period:""}{s.credits!==""&&s.credits!=null?" · "+s.credits+" นก.":""}</div> : null}
           </div>
         </div>
         <div style={{display:"flex",borderTop:"1px solid "+C.border}}>
@@ -438,6 +495,10 @@ function HomeView({subjects,setSubjects,openSubject,students,setStudents,fixes,o
       <Field label="ชื่อวิชา"><input style={inputStyle} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="เช่น วิทยาการคำนวณ"/></Field>
       <Field label="รหัสวิชา"><input style={inputStyle} value={form.code} onChange={e=>setForm({...form,code:e.target.value})} placeholder="เช่น ว21104"/></Field>
       <Field label="ห้องเรียน"><input style={inputStyle} value={form.room} onChange={e=>setForm({...form,room:e.target.value})} placeholder="เช่น ม.1/1"/></Field>
+      <Field label="วันที่สอนในสัปดาห์ (ใช้ส่งสรุปเข้าไลน์ตอนเช้า)"><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {DAYS.map(d=>{ const on=(form.days||[]).includes(d); return <button key={d} onClick={()=>setForm({...form,days:on?form.days.filter(x=>x!==d):DAYS.filter(x=>x===d||(form.days||[]).includes(x))})} style={{padding:"7px 13px",borderRadius:20,cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:14,border:"1px solid "+(on?C.navy:C.border),background:on?C.navy:"#fff",color:on?"#fff":C.navy}}>{d}</button>; })}</div></Field>
+      <Field label="คาบ / เวลา (ไม่บังคับ)"><input style={inputStyle} value={form.period||""} onChange={e=>setForm({...form,period:e.target.value})} placeholder="เช่น คาบ 2 หรือ 09:30-10:20"/></Field>
+      <Field label="หน่วยกิต (ไม่บังคับ)"><input style={inputStyle} value={form.credits==null?"":form.credits} onChange={e=>setForm({...form,credits:e.target.value})} placeholder="เช่น 1.0"/></Field>
       <Field label="สีประจำวิชา"><div style={{display:"flex",gap:8}}>
         {CARD_COLORS.map(c=><button key={c} onClick={()=>setForm({...form,color:c})} style={{width:30,height:30,borderRadius:8,background:c,cursor:"pointer",border:form.color===c?"3px solid "+C.navy:"2px solid #fff",outline:form.color===c?"1px solid "+C.navy:"none"}}/>)}
       </div></Field>
@@ -1062,21 +1123,28 @@ function PendingView({subj,students,assignments,scores,logoUrl}){
 }
 
 /* ---------- NOTES ---------- */
-function NotesView({subj,notes,setNotes}){
+function NotesView({subj,notes,setNotes,notePresets,setNotePresets,term}){
   const persist=usePersist();
   const list=(notes[subj.id]||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({date:todayStr(),text:""});
   const [filterFrom,setFilterFrom]=useState(""); const [filterTo,setFilterTo]=useState(""); const [q,setQ]=useState("");
   const filtered=list.filter(n=>(!filterFrom||n.date>=filterFrom)&&(!filterTo||n.date<=filterTo)&&(!q||n.text.toLowerCase().includes(q.toLowerCase())));
+  const sem=(term&&term.semester)||"";
+  /* จำข้อความที่เคยพิมพ์ (ล่าสุดก่อน สูงสุด 40) เก็บที่ settings/noteTexts */
+  const remember=(t)=>{ t=(t||"").trim(); if(!t||t.length>400) return; const next=[t,...(notePresets||[]).filter(x=>x!==t)].slice(0,40); setNotePresets(next); Promise.resolve(persist.setNotePresets(next)).catch(e=>console.error(e)); };
+  const forget=(t)=>{ const next=(notePresets||[]).filter(x=>x!==t); setNotePresets(next); Promise.resolve(persist.setNotePresets(next)).catch(e=>console.error(e)); };
+  const pick=(t)=>setForm(f=>({...f,text:f.text.trim()?f.text.replace(/\s+$/,"")+"\n"+t:t}));
   const save=()=>{ if(!form.text.trim()) return;
-    if(modal.mode==="add"){ const rec={id:uid(),date:form.date,text:form.text.trim()};
-      setNotes(p=>({...p,[subj.id]:[...(p[subj.id]||[]),rec]})); persist.addNote(subj.id,rec);
-    } else { const upd={date:form.date,text:form.text.trim()};
-      setNotes(p=>({...p,[subj.id]:(p[subj.id]||[]).map(n=>n.id===modal.id?{...n,...upd}:n)})); persist.updateNote(modal.id,upd); }
+    const now=Date.now();
+    if(modal.mode==="add"){ const rec={id:uid(),date:form.date,text:form.text.trim(),updatedAt:now};
+      setNotes(p=>({...p,[subj.id]:[...(p[subj.id]||[]),rec]})); persist.addNote(subj.id,rec); gasPost("upsertNote",{note:gasNote(rec,subj,sem)});
+    } else { const upd={date:form.date,text:form.text.trim(),updatedAt:now};
+      setNotes(p=>({...p,[subj.id]:(p[subj.id]||[]).map(n=>n.id===modal.id?{...n,...upd}:n)})); persist.updateNote(modal.id,upd); gasPost("upsertNote",{note:gasNote({id:modal.id,...upd},subj,sem)}); }
+    remember(form.text);
     setModal(null); };
   const remove=(id)=>{ if(!window.confirm("ลบบันทึกนี้?")) return;
-    setNotes(p=>({...p,[subj.id]:(p[subj.id]||[]).filter(n=>n.id!==id)})); persist.deleteNote(id); };
+    setNotes(p=>({...p,[subj.id]:(p[subj.id]||[]).filter(n=>n.id!==id)})); persist.deleteNote(id); gasPost("deleteNote",{id}); };
   return <div>
     <SectionHead title="บันทึกช่วยจำ" right={<Btn variant="accent" size="sm" onClick={()=>{setForm({date:todayStr(),text:""});setModal({mode:"add"});}}><Plus size={16}/>เพิ่มบันทึก</Btn>}/>
     <div style={{background:"#fff",border:"1px solid "+C.border,borderRadius:12,padding:14,marginBottom:12}}>
@@ -1107,6 +1175,7 @@ function NotesView({subj,notes,setNotes}){
     <Modal open={!!modal} onClose={()=>setModal(null)} title={modal&&modal.mode==="add"?"เพิ่มบันทึก":"แก้ไขบันทึก"}>
       <Field label="วันที่"><input type="date" style={inputStyle} value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></Field>
       <Field label="รายละเอียด"><textarea style={{...inputStyle,minHeight:120,resize:"vertical"}} value={form.text} onChange={e=>setForm({...form,text:e.target.value})} placeholder="พิมพ์บันทึกช่วยจำ..."/></Field>
+      <PresetChips list={notePresets} onPick={pick} onForget={forget} label="ข้อความที่เคยพิมพ์ (แตะเพื่อเติมต่อท้าย · กด × เพื่อลบ)"/>
       <Btn variant="primary" onClick={save} style={{width:"100%"}}><Save size={16}/>บันทึก</Btn>
     </Modal>
   </div>;
@@ -1714,7 +1783,297 @@ function FixView({fixes,setFixes,taskPresets,setTaskPresets}){
   </div>;
 }
 
-function SettingsView({subjects,students,setStudents,logoUrl,setLogoUrl}){
+/* ==================== ภาคเรียน / นำเข้ารายวิชา / นำเข้ารายชื่อ / ล้างข้อมูล ==================== */
+function PresetChips({list,onPick,onForget,label}){
+  if(!list||!list.length) return null;
+  return <div style={{marginTop:-6,marginBottom:14}}>
+    <div style={{fontSize:12.5,color:SUB,fontWeight:600,marginBottom:5}}>{label||"ข้อความสำเร็จรูป (แตะเพื่อใช้ · กด × เพื่อลบ)"}</div>
+    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{list.map(t=><span key={t} style={{display:"inline-flex",alignItems:"center",background:C.navySoft,borderRadius:20,maxWidth:"100%"}}>
+      <button onClick={()=>onPick(t)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:13,color:C.navy,fontWeight:600,padding:"5px 4px 5px 11px",textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:240}}>{t}</button>
+      <button onClick={()=>onForget(t)} title="ลบข้อความนี้" style={{background:"none",border:"none",cursor:"pointer",color:SUB,fontSize:15,padding:"3px 9px 3px 4px"}}>×</button></span>)}</div></div>;
+}
+
+/* ----- template รายวิชา ----- */
+const SUBJ_HEAD=["รหัสวิชา","ชื่อวิชา","ชั้น/ห้อง","วันที่สอน","คาบ/เวลา","หน่วยกิต"];
+const SUBJ_COLS={code:["รหัสวิชา"],name:["ชื่อวิชา","รายวิชา"],room:["ชั้น/ห้อง","ห้อง","ชั้น","ระดับชั้น"],days:["วันที่สอน","วันสอน","วัน"],period:["คาบ/เวลา","คาบ","เวลา"],credits:["หน่วยกิต","จำนวนหน่วยกิต"]};
+function downloadSubjectTemplate(){
+  const ws=XLSX.utils.aoa_to_sheet([SUBJ_HEAD,
+    ["ตัวอย่าง-ท21101","ภาษาไทย 1","ม.1/1","จ,พ","จ คาบ 2 / พ คาบ 5",1.5],
+    ["ตัวอย่าง-ท21101","ภาษาไทย 1","ม.1/2","อ,พฤ","อ คาบ 3 / พฤ คาบ 1",1.5],
+    ["ตัวอย่าง-ท33101","ภาษาไทย 5","ม.6/1","ศ","ศ 09:30-11:10",1]]);
+  ws["!cols"]=[16,26,12,16,26,10].map(w=>({wch:w}));
+  SUBJ_HEAD.forEach((_,c)=>{ const ref=XLSX.utils.encode_cell({r:0,c}); ws[ref].s={fill:{patternType:"solid",fgColor:{rgb:"1F3A5F"}},font:{color:{rgb:"FFFFFF"},bold:true},alignment:{horizontal:"center"}}; });
+  const help=XLSX.utils.aoa_to_sheet([["วิธีกรอก template รายวิชา"],
+    ["1) ลบแถวตัวอย่าง (รหัสวิชาขึ้นต้น “ตัวอย่าง-”) หรือพิมพ์ทับได้เลย — แถวตัวอย่างจะไม่ถูกนำเข้า"],
+    ["2) 1 แถว = 1 วิชา ต่อ 1 ห้อง (สอนหลายห้องให้แยกเป็นหลายแถว)"],
+    ["3) ชั้น/ห้อง: เช่น ม.1/1 หรือ 1/1 (ใช้ให้ตรงกับไฟล์รายชื่อนักเรียน เพื่อให้ระบบดึงรายชื่อเข้าวิชาให้อัตโนมัติ)"],
+    ["4) วันที่สอน: จ อ พ พฤ ศ ส อา หลายวันคั่นด้วยจุลภาค เช่น จ,พ หรือเขียนเต็ม เช่น จันทร์,พุธ"],
+    ["5) คาบ/เวลา: ข้อความอิสระ ใช้แสดงในข้อความไลน์ เช่น คาบ 2 หรือ 09:30-10:20 (ไม่บังคับ)"],
+    ["6) หน่วยกิต: ตัวเลข เช่น 1.0 หรือ 0.5 (ไม่บังคับ)"],
+    ["7) บันทึกเป็น .xlsx แล้วนำเข้าที่ ตั้งค่า → นำเข้ารายวิชาภาคเรียนใหม่"]]);
+  help["!cols"]=[{wch:100}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"รายวิชา"); XLSX.utils.book_append_sheet(wb,help,"วิธีกรอก");
+  XLSX.writeFile(wb,"template_รายวิชา.xlsx");
+}
+function parseSubjectsWorkbook(wb){
+  const items=[], warnings=[], seen=new Set();
+  wb.SheetNames.forEach(sn=>{
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:false,defval:""});
+    let hi=-1;
+    for(let i=0;i<Math.min(rows.length,10);i++){ const t=(rows[i]||[]).map(c=>String(c).trim()); if(t.includes("รหัสวิชา")){ hi=i; break; } }
+    if(hi<0) return;
+    const head=rows[hi].map(c=>String(c).trim()), ix={};
+    Object.keys(SUBJ_COLS).forEach(k=>{ ix[k]=-1; for(const n of SUBJ_COLS[k]){ const i=head.indexOf(n); if(i>=0){ ix[k]=i; break; } } });
+    rows.slice(hi+1).forEach((r,j)=>{
+      const g=(k)=>ix[k]>=0?String(r[ix[k]]==null?"":r[ix[k]]).trim():"";
+      const code=g("code"); if(!code||/^ตัวอย่าง/.test(code)) return;
+      const room=normRoom(g("room"));
+      if(!room){ warnings.push(sn+" แถว "+(hi+j+2)+": "+code+" — ชั้น/ห้อง “"+g("room")+"” อ่านไม่ได้ (ข้ามแถวนี้)"); return; }
+      const key=nameKey(code)+"|"+room;
+      if(seen.has(key)){ warnings.push(code+" "+room+": มีซ้ำในไฟล์ (ใช้แถวแรก)"); return; }
+      seen.add(key);
+      const days=parseDays(g("days"));
+      if(!days.length) warnings.push(code+" "+room+": ไม่ระบุวันที่สอน — จะไม่ถูกส่งสรุปเข้าไลน์");
+      const cr=g("credits").replace(",",".");
+      items.push({code,name:g("name"),room,days,period:g("period"),credits:cr===""?"":(isNaN(+cr)?cr:+cr)});
+    });
+  });
+  return {items,warnings};
+}
+
+/* ----- ไฟล์รายชื่อนักเรียน (export จากระบบสารสนเทศชั้นเรียน / ใบมอบตัว) ----- */
+const ROS_NAME=["ชื่อ-สกุลนักเรียน","ชื่อ-สกุล","ชื่อ - สกุล","ชื่อนักเรียน"], ROS_ID=["เลขประจำตัวนักเรียน","เลขประจำตัว"], ROS_NO=["ลำดับ","เลขที่"], ROS_ROOM=["ชั้น/ห้อง","ห้อง","ระดับชั้น","ชั้น"], ROS_SEX=["เพศ"];
+async function readRosterFile(file){
+  const isCsv=/\.csv$/i.test(file.name); let wb;
+  if(isCsv){ let t=await file.text(); if(t.charCodeAt(0)===0xFEFF) t=t.slice(1); wb=XLSX.read(t,{type:"string",raw:true}); }
+  else wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:"array"});
+  const out=[], fileRoom=normRoom(file.name,true);
+  wb.SheetNames.forEach(sn=>{
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:isCsv,defval:""});
+    let hi=-1;
+    for(let i=0;i<Math.min(rows.length,10);i++){ const t=(rows[i]||[]).map(c=>String(c).trim()); if(ROS_NAME.some(n=>t.includes(n))){ hi=i; break; } }
+    if(hi<0) return;
+    const head=rows[hi].map(c=>String(c).trim());
+    const find=(cands)=>{ for(const n of cands){ const i=head.indexOf(n); if(i>=0) return i; } return -1; };
+    const cN=find(ROS_NAME), cI=find(ROS_ID), cNo=find(ROS_NO), cR=find(ROS_ROOM), cS=find(ROS_SEX);
+    const sheetRoom=normRoom(sn,true);
+    rows.slice(hi+1).forEach(r=>{
+      const name=String(r[cN]==null?"":r[cN]).replace(/\s+/g," ").trim(); if(!name) return;
+      const room=(cR>=0?normRoom(r[cR]):"")||sheetRoom||fileRoom||"";
+      const no=cNo>=0?parseInt(String(r[cNo]).trim(),10):NaN;
+      out.push({room,name,studentId:cI>=0?String(r[cI]==null?"":r[cI]).trim().replace(/\.0+$/,""):"",number:isNaN(no)?null:no,gender:cS>=0?String(r[cS]||"").trim():""});
+    });
+  });
+  return out;
+}
+/* จัดกลุ่มตามห้อง + ใส่เลขที่ (ใช้ “ลำดับ” ในไฟล์ถ้ามีครบ ไม่งั้นเรียงตามเลขประจำตัวแล้วชื่อ) */
+function buildRosterGroups(rows,fallback,level){
+  const fb=normRoom(fallback), map=new Map(); let unknown=0;
+  rows.forEach(r=>{ const room=r.room||fb; if(!room){ unknown++; return; } if(level&&roomLevel(room)!==level) return;
+    if(!map.has(room)) map.set(room,[]); map.get(room).push(r); });
+  const groups=[...map.entries()].sort((a,b)=>a[0].localeCompare(b[0],"th",{numeric:true})).map(([room,list])=>{
+    const seen=new Set(), uniq=list.filter(x=>{ const k=x.studentId||nameKey(x.name); if(seen.has(k)) return false; seen.add(k); return true; });
+    const hasNo=uniq.every(x=>x.number!=null);
+    uniq.sort(hasNo?((a,b)=>a.number-b.number):((a,b)=>(a.studentId&&b.studentId)?a.studentId.localeCompare(b.studentId,"th",{numeric:true}):a.name.localeCompare(b.name,"th")));
+    return {room,students:uniq.map((x,i)=>({number:hasNo?x.number:i+1,name:x.name,studentId:x.studentId,gender:x.gender}))};
+  });
+  return {groups,unknown};
+}
+
+/* ----- ไฟล์สำรองก่อนล้างข้อมูล ----- */
+function downloadBackup(app,label){
+  const {subjects,students,attendance,assignments,scores,notes}=app;
+  const sName=(id)=>{ const s=subjects.find(x=>x.id===id); return s?s.code+" "+s.name+" ("+s.room+")":id; };
+  const wb=XLSX.utils.book_new(); let n=0;
+  const add=(name,rows)=>{ if(rows.length>1){ XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),name); n++; } };
+  add("รายวิชา",[["รหัสวิชา","ชื่อวิชา","ห้อง","วันที่สอน","คาบ/เวลา","หน่วยกิต","ภาคเรียน"],...subjects.map(s=>[s.code,s.name,s.room,(s.days||[]).join(","),s.period||"",s.credits==null?"":s.credits,s.semester||""])]);
+  const nameOf={}; Object.values(students).forEach(l=>l.forEach(x=>{ nameOf[x.id]=x.name; }));
+  const st=[["รายวิชา","เลขที่","ชื่อ-สกุล","เลขประจำตัว","สถานะ"]];
+  subjects.forEach(s=>(students[s.id]||[]).forEach(x=>st.push([sName(s.id),x.number,x.name,x.studentId||"",x.status||"normal"]))); add("นักเรียน",st);
+  const sc=[["รายวิชา","นักเรียน","ภาระงาน","คะแนนเต็ม","คะแนน"]];
+  subjects.forEach(s=>{ const as=assignments[s.id]||[]; Object.entries(scores[s.id]||{}).forEach(([sid,vals])=>as.forEach(a=>{ const v=vals&&vals[a.id]; if(v!=null&&v!=="") sc.push([sName(s.id),nameOf[sid]||sid,a.title,a.max,v]); })); }); add("คะแนน",sc);
+  const at=[["รายวิชา","วันที่","นักเรียน","สถานะ"]];
+  subjects.forEach(s=>Object.entries(attendance[s.id]||{}).forEach(([d,marks])=>Object.entries(marks||{}).forEach(([sid,v])=>at.push([sName(s.id),d,nameOf[sid]||sid,(STATUS[v]||{}).label||v])))); add("เช็คชื่อ",at);
+  const nt=[["รายวิชา","วันที่","บันทึก"]];
+  subjects.forEach(s=>(notes[s.id]||[]).forEach(x=>nt.push([sName(s.id),x.date,x.text]))); add("บันทึกช่วยจำ",nt);
+  if(!n) return false;
+  XLSX.writeFile(wb,"สำรองข้อมูลรายวิชา_"+(label||"")+"_"+localToday()+".xlsx"); return true;
+}
+
+function TermPanels({app}){
+  const persist=usePersist();
+  const {subjects,setSubjects,students,setStudents,term,setTerm,rosters,setRosters}=app;
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
+  const [cfg,setCfg]=useState({semester:term.semester||"",gasUrl:term.gasUrl||"",gasKey:term.gasKey||""});
+  const [imp,setImp]=useState(null), [ros,setRos]=useState(null), [clr,setClr]=useState(null);
+  const subjRef=useRef(), rosRef=useRef();
+  useEffect(()=>{ setCfg({semester:term.semester||"",gasUrl:term.gasUrl||"",gasKey:term.gasKey||""}); },[term]);
+  const save=async(p)=>{ try{ await p; return true; }catch(e){ console.error(e); alert("บันทึกลงฐานข้อมูลไม่สำเร็จ: "+(e.message||e)); return false; } };
+
+  /* --- ภาคเรียน + เชื่อม Google Sheet --- */
+  const saveCfg=async()=>{ const t={semester:cfg.semester.trim(),gasUrl:cfg.gasUrl.trim(),gasKey:cfg.gasKey.trim()};
+    GAS.url=t.gasUrl; GAS.key=t.gasKey; setTerm(t); if(await save(persist.setTerm(t))) setMsg("บันทึกการตั้งค่าแล้ว"); };
+  const testGas=async()=>{ GAS.url=cfg.gasUrl.trim(); GAS.key=cfg.gasKey.trim(); setMsg("กำลังทดสอบ…");
+    const r=await gasPost("ping",{});
+    setMsg(r.skipped?"ยังไม่ได้ใส่ลิงก์ Web App":r.ok?(r.unverified?"ส่งคำขอแล้ว แต่เบราว์เซอร์อ่านผลตอบกลับไม่ได้ — ตรวจที่ชีตแท็บ Log ว่ามีรายการ ping":"เชื่อมต่อสำเร็จ ✔"):(r.data&&r.data.error==="unauthorized"?"รหัสลับ (SECRET) ไม่ตรงกับในสคริปต์":"เชื่อมต่อไม่สำเร็จ")); };
+  const syncAll=async()=>{ setBusy(true); setMsg("กำลังส่งข้อมูลทั้งหมดขึ้น Google Sheet…");
+    const r1=await gasPost("upsertSubjects",{semester:term.semester,replace:true,subjects:subjects.map(s=>gasSubject(s,term.semester))});
+    const all=[]; subjects.forEach(s=>(app.notes[s.id]||[]).forEach(n=>all.push(gasNote(n,s,term.semester))));
+    let okN=true; for(let i=0;i<all.length;i+=100){ const r=await gasPost("upsertNotes",{notes:all.slice(i,i+100)}); if(!r.ok) okN=false; }
+    setBusy(false); setMsg(r1.ok&&okN?"ส่งแล้ว: "+subjects.length+" วิชา, "+all.length+" บันทึก":"ส่งไม่สำเร็จบางส่วน (ดู Console)"); };
+
+  /* --- นำเข้ารายวิชา --- */
+  const onSubjFile=async(e)=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return;
+    try{ const r=parseSubjectsWorkbook(XLSX.read(new Uint8Array(await f.arrayBuffer()),{type:"array"}));
+      if(!r.items.length){ alert("ไม่พบรายวิชาในไฟล์ — ต้องมีหัวคอลัมน์ รหัสวิชา และ ชั้น/ห้อง (โหลด template จากปุ่มด้านบน)"); return; }
+      setImp({...r,fileName:f.name,semester:term.semester||""}); }
+    catch(err){ alert("อ่านไฟล์ไม่สำเร็จ: "+err.message); } };
+  const doImport=async()=>{ setBusy(true);
+    const sem=imp.semester.trim(), now=Date.now(), created=[], updated=[];
+    imp.items.forEach((it,i)=>{ const ex=subjects.find(s=>nameKey(s.code)===nameKey(it.code)&&nameKey(s.room)===nameKey(it.room));
+      if(ex) updated.push({...ex,name:it.name||ex.name,days:it.days,period:it.period,credits:it.credits,semester:sem||ex.semester||""});
+      else created.push({id:uid(),code:it.code,name:it.name||it.code,room:it.room,days:it.days,period:it.period,credits:it.credits,semester:sem,color:CARD_COLORS[(subjects.length+created.length)%CARD_COLORS.length],createdAt:now+i}); });
+    const writes=[...updated,...created];
+    const merged=(()=>{ const m=new Map(subjects.map(s=>[s.id,s])); writes.forEach(s=>m.set(s.id,s)); return [...m.values()].sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)); })();
+    await save(persist.setSubjects(writes));
+    setSubjects(merged);
+    /* วิชาใหม่ที่ห้องตรงกับรายชื่อกลาง (roster) → ใส่รายชื่อให้อัตโนมัติ */
+    let filled=0; const stu={...students};
+    for(const s of created){ const r=rosters[roomKey(s.room)]; if(r&&r.students&&r.students.length){
+      const list=r.students.map(x=>({id:uid(),number:x.number,name:x.name,studentId:x.studentId||"",status:"normal"}));
+      stu[s.id]=list; filled++; await save(persist.upsertStudents(s.id,list)); } }
+    setStudents(stu);
+    if(sem&&sem!==term.semester){ const t={...term,semester:sem}; setTerm(t); await save(persist.setTerm({semester:sem})); }
+    await gasPost("upsertSubjects",{semester:sem||term.semester,replace:true,subjects:merged.map(s=>gasSubject(s,sem||term.semester))});
+    setBusy(false); setImp(null);
+    setMsg("นำเข้ารายวิชาแล้ว: เพิ่มใหม่ "+created.length+" · อัปเดต "+updated.length+(filled?" · ดึงรายชื่อนักเรียนอัตโนมัติ "+filled+" วิชา":"")); };
+
+  /* --- นำเข้ารายชื่อนักเรียน --- */
+  const onRosFile=async(e)=>{ const files=[...e.target.files]; e.target.value=""; if(!files.length) return;
+    try{ let rows=[]; for(const f of files) rows=rows.concat(await readRosterFile(f));
+      if(!rows.length){ alert("ไม่พบรายชื่อ — ไฟล์ต้องมีคอลัมน์ ชื่อ-สกุล (หรือ ชื่อ-สกุลนักเรียน)"); return; }
+      setRos({rows,fallback:"",level:"",names:files.map(f=>f.name).join(", ")}); }
+    catch(err){ alert("อ่านไฟล์ไม่สำเร็จ: "+err.message); } };
+  const doRoster=async()=>{ setBusy(true);
+    const {groups}=buildRosterGroups(ros.rows,ros.fallback,ros.level), now=Date.now();
+    const newRosters={...rosters}, stu={...students}; let added=0, upd=0, nSub=0;
+    for(const g of groups){ const key=roomKey(g.room), doc={room:g.room,level:roomLevel(g.room),students:g.students,updatedAt:now};
+      newRosters[key]=doc; await save(persist.setRoster(key,doc));
+      for(const s of subjects.filter(x=>nameKey(x.room)===nameKey(g.room))){
+        const cur=stu[s.id]||[], byId=new Map(), byName=new Map(); cur.forEach(x=>{ if(x.studentId) byId.set(String(x.studentId),x); byName.set(nameKey(x.name),x); });
+        const next=[...cur], writes=[];
+        g.students.forEach(st=>{ const ex=(st.studentId&&byId.get(String(st.studentId)))||byName.get(nameKey(st.name));
+          if(ex){ const u={...ex,number:st.number,name:st.name,studentId:st.studentId||ex.studentId||""}; writes.push(u); next[next.findIndex(x=>x.id===ex.id)]=u; upd++; }
+          else { const nw={id:uid(),number:st.number,name:st.name,studentId:st.studentId||"",status:"normal"}; writes.push(nw); next.push(nw); added++; } });
+        next.sort((a,b)=>(a.number||0)-(b.number||0)); stu[s.id]=next; nSub++;
+        await save(persist.upsertStudents(s.id,writes)); } }
+    setRosters(newRosters); setStudents(stu); setBusy(false); setRos(null);
+    setMsg("นำเข้ารายชื่อแล้ว "+groups.length+" ห้อง ("+groups.reduce((a,g)=>a+g.students.length,0)+" คน) · เติมเข้า "+nSub+" วิชา (เพิ่มใหม่ "+added+" · อัปเดต "+upd+" คน)"); };
+
+  /* --- ล้างข้อมูลรายวิชาทั้งหมด --- */
+  const openClear=()=>setClr({text:"",backup:true,roster:false,fixes:false,gas:!!GAS.url,nextSem:nextSemester(term.semester)});
+  const doClear=async()=>{ setBusy(true);
+    if(clr.backup){ try{ downloadBackup(app,(term.semester||"").replace("/","-")); }
+      catch(e){ console.error(e); if(!window.confirm("สร้างไฟล์สำรองไม่สำเร็จ ต้องการล้างต่อโดยไม่สำรองหรือไม่?")){ setBusy(false); return; } } }
+    const names=["subjects","students","attendance","assignments","scores","notes","qinfo"]; if(clr.fixes) names.push("fixes"); if(clr.roster) names.push("roster");
+    if(!(await save(persist.clearCollections(names)))){ setBusy(false); return; }
+    setSubjects([]); setStudents({}); app.setAttendance({}); app.setAssignments({}); app.setScores({}); app.setNotes({}); app.setQinfo({});
+    if(clr.fixes) app.setFixes([]); if(clr.roster) setRosters({});
+    const sem=clr.nextSem.trim(); if(sem){ setTerm({...term,semester:sem}); await save(persist.setTerm({semester:sem})); }
+    if(clr.gas) await gasPost("resetTerm",{semester:sem});
+    setBusy(false); setClr(null); setMsg("ล้างข้อมูลรายวิชาแล้ว"+(sem?" · ภาคเรียนปัจจุบัน "+sem:"")+" — นำเข้ารายวิชาใหม่จาก template ได้เลย"); };
+
+  const rg=ros?buildRosterGroups(ros.rows,ros.fallback,ros.level):{groups:[],unknown:0};
+  const levels=ros?[...new Set(ros.rows.map(r=>roomLevel(r.room||normRoom(ros.fallback))).filter(Boolean))].sort():[];
+
+  return <div style={{display:"grid",gap:14}}>
+    {msg && <div style={{background:"#e6f4ec",color:"#2e7d52",border:"1px solid #bfe3cd",borderRadius:10,padding:"10px 14px",fontSize:14,fontWeight:600}}>{msg}</div>}
+
+    <div style={panel}>
+      <div style={panelHead}><Cloud size={18}/> ภาคเรียนปัจจุบัน และการเชื่อม Google Sheet / LINE</div>
+      <Field label="ภาคเรียน (เช่น 1/2569)"><input style={inputStyle} value={cfg.semester} onChange={e=>setCfg({...cfg,semester:e.target.value})} placeholder="1/2569"/></Field>
+      <Field label="ลิงก์ Web App ของ Google Apps Script (ลงท้าย /exec)"><input style={inputStyle} value={cfg.gasUrl} onChange={e=>setCfg({...cfg,gasUrl:e.target.value})} placeholder="https://script.google.com/macros/s/.../exec"/></Field>
+      <Field label="รหัสลับ SECRET (ตั้งให้ตรงกับในสคริปต์ — เว้นว่างได้ถ้าไม่ตั้ง)"><input style={inputStyle} value={cfg.gasKey} onChange={e=>setCfg({...cfg,gasKey:e.target.value})}/></Field>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        <Btn variant="primary" onClick={saveCfg}><Save size={15}/>บันทึก</Btn>
+        <Btn variant="ghost" onClick={testGas}>ทดสอบเชื่อมต่อ</Btn>
+        <Btn variant="ghost" onClick={syncAll} disabled={busy||!cfg.gasUrl}><Upload size={15}/>ส่งข้อมูลทั้งหมดขึ้น Google Sheet</Btn>
+      </div>
+      <div style={{fontSize:12.5,color:SUB,marginTop:8,lineHeight:1.6}}>วิชาและบันทึกช่วยจำจะถูกส่งขึ้น Google Sheet อัตโนมัติทุกครั้งที่บันทึก เพื่อให้ระบบส่งสรุปเข้า LINE ตอน 07:00 (วิธีตั้งค่าดูใน gas/README.md)</div>
+    </div>
+
+    <div style={panel}>
+      <div style={panelHead}><Table size={18}/> นำเข้ารายวิชาภาคเรียนใหม่ (template)</div>
+      <div style={{fontSize:13.5,color:SUB,lineHeight:1.6,marginBottom:10}}>โหลด template → กรอก รหัสวิชา / ชื่อวิชา / ชั้น-ห้อง / วันที่สอน / คาบ-เวลา / หน่วยกิต → นำเข้า ระบบจะดึงรายชื่อนักเรียนเข้าวิชาให้อัตโนมัติถ้าเคยนำเข้ารายชื่อห้องนั้นไว้แล้ว</div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        <Btn variant="ghost" onClick={downloadSubjectTemplate}><Download size={15}/>ดาวน์โหลด template</Btn>
+        <Btn variant="accent" onClick={()=>subjRef.current&&subjRef.current.click()}><Upload size={15}/>นำเข้ารายวิชา (.xlsx)</Btn>
+        <input ref={subjRef} type="file" accept=".xlsx,.xls" onChange={onSubjFile} style={{display:"none"}}/>
+      </div>
+    </div>
+
+    <div style={panel}>
+      <div style={panelHead}><Upload size={18}/> นำเข้ารายชื่อนักเรียนตามระดับชั้น</div>
+      <div style={{fontSize:13.5,color:SUB,lineHeight:1.6,marginBottom:10}}>เลือกไฟล์ที่ Export จากระบบสารสนเทศชั้นเรียน (รายชื่อนักเรียน_ม…xlsx) หรือไฟล์ใบมอบตัว .csv เลือกได้หลายไฟล์พร้อมกัน ระบบจับห้องจากคอลัมน์ ชั้น/ห้อง ชื่อชีต หรือชื่อไฟล์ แล้วเติมรายชื่อเข้าวิชาที่ห้องตรงกัน (ไม่ลบนักเรียนเดิม จึงไม่กระทบคะแนน)
+        {Object.keys(rosters).length>0 && <span> · รายชื่อกลางที่มีอยู่ตอนนี้ {Object.keys(rosters).length} ห้อง</span>}</div>
+      <Btn variant="accent" onClick={()=>rosRef.current&&rosRef.current.click()}><Upload size={15}/>เลือกไฟล์รายชื่อ (.xlsx / .csv)</Btn>
+      <input ref={rosRef} type="file" multiple accept=".xlsx,.xls,.csv" onChange={onRosFile} style={{display:"none"}}/>
+    </div>
+
+    <div style={{...panel,borderColor:"#f0c9c4"}}>
+      <div style={{...panelHead,color:"#c0392b"}}><Trash2 size={18}/> ล้างข้อมูลรายวิชาทั้งหมด (จบภาคเรียน)</div>
+      <div style={{fontSize:13.5,color:SUB,lineHeight:1.6,marginBottom:10}}>ลบรายวิชา นักเรียน เช็คชื่อ คะแนน ภาระงาน บันทึกช่วยจำ และการเทียบ Q-Info ({subjects.length} วิชา) — ระบบจะโหลดไฟล์สำรอง .xlsx ให้ก่อน และบันทึกช่วยจำที่ส่งขึ้น Google Sheet แล้วจะยังคงอยู่ในชีต</div>
+      <Btn variant="danger" onClick={openClear} disabled={!subjects.length}><Trash2 size={15}/>ล้างข้อมูลรายวิชา…</Btn>
+    </div>
+
+    <Modal open={!!imp} onClose={()=>!busy&&setImp(null)} title="นำเข้ารายวิชา" width={640}>
+      {imp && <div>
+        <div style={{fontSize:13.5,color:SUB,marginBottom:10}}>ไฟล์: {imp.fileName} · พบ {imp.items.length} วิชา/ห้อง</div>
+        <Field label="ภาคเรียน"><input style={inputStyle} value={imp.semester} onChange={e=>setImp({...imp,semester:e.target.value})} placeholder="1/2569"/></Field>
+        <div style={{...tableWrap,maxHeight:260,marginBottom:10}}><table style={tableStyle}>
+          <thead><tr>{["รหัส","ชื่อวิชา","ห้อง","วัน","คาบ/เวลา","หน่วยกิต",""].map((h,i)=><th key={i} style={th}>{h}</th>)}</tr></thead>
+          <tbody>{imp.items.map((it,i)=>{ const ex=subjects.some(s=>nameKey(s.code)===nameKey(it.code)&&nameKey(s.room)===nameKey(it.room));
+            return <tr key={i} className="tl-row"><td style={td}>{it.code}</td><td style={td}>{it.name}</td><td style={td}>{it.room}</td><td style={td}>{it.days.join(",")||"—"}</td><td style={td}>{it.period}</td><td style={{...td,textAlign:"center"}}>{it.credits}</td>
+              <td style={{...td,fontSize:12,color:ex?"#b7791f":"#2e7d52",fontWeight:700}}>{ex?"อัปเดต":"ใหม่"}</td></tr>; })}</tbody></table></div>
+        {imp.warnings.length>0 && <details style={{fontSize:12.5,color:"#b7791f",marginBottom:10}}><summary style={{cursor:"pointer"}}>ข้อควรตรวจ {imp.warnings.length} รายการ</summary>{imp.warnings.slice(0,30).map((w,i)=><div key={i}>{w}</div>)}</details>}
+        <div style={{fontSize:12.5,color:SUB,marginBottom:12}}>วิชาที่มีรหัส+ห้องตรงกับที่มีอยู่แล้วจะอัปเดตตารางสอน/หน่วยกิตเท่านั้น (ไม่แตะนักเรียนและคะแนน)</div>
+        <Btn variant="primary" onClick={doImport} disabled={busy} style={{width:"100%"}}><Save size={16}/>{busy?"กำลังนำเข้า…":"ยืนยันนำเข้า"}</Btn>
+      </div>}
+    </Modal>
+
+    <Modal open={!!ros} onClose={()=>!busy&&setRos(null)} title="นำเข้ารายชื่อนักเรียน" width={640}>
+      {ros && <div>
+        <div style={{fontSize:13.5,color:SUB,marginBottom:10}}>ไฟล์: {ros.names} · อ่านได้ {ros.rows.length} แถว</div>
+        {ros.rows.some(r=>!r.room) && <Field label={"มี "+ros.rows.filter(r=>!r.room).length+" แถวที่ไม่ทราบห้อง — ระบุห้องให้แถวเหล่านี้ (เช่น ม.1/1)"}><input style={inputStyle} value={ros.fallback} onChange={e=>setRos({...ros,fallback:e.target.value})} placeholder="ม.1/1"/></Field>}
+        <Field label="นำเข้าเฉพาะระดับชั้น"><select style={inputStyle} value={ros.level} onChange={e=>setRos({...ros,level:e.target.value})}><option value="">ทุกระดับชั้นในไฟล์</option>{levels.map(l=><option key={l} value={l}>{l}</option>)}</select></Field>
+        <div style={{...tableWrap,maxHeight:240,marginBottom:10}}><table style={tableStyle}>
+          <thead><tr><th style={th}>ห้อง</th><th style={th}>นักเรียน</th><th style={th}>วิชาที่ตรงห้องนี้</th><th style={th}>รายชื่อกลางเดิม</th></tr></thead>
+          <tbody>{rg.groups.map(g=><tr key={g.room} className="tl-row"><td style={td}><b>{g.room}</b></td><td style={{...td,textAlign:"center"}}>{g.students.length}</td>
+            <td style={{...td,textAlign:"center",color:subjects.some(s=>nameKey(s.room)===nameKey(g.room))?"#2e7d52":SUB}}>{subjects.filter(s=>nameKey(s.room)===nameKey(g.room)).length}</td>
+            <td style={{...td,textAlign:"center",color:SUB}}>{(rosters[roomKey(g.room)]||{students:[]}).students.length||"—"}</td></tr>)}
+            {!rg.groups.length && <tr><td colSpan={4} style={{...td,textAlign:"center",color:SUB}}>ไม่มีรายชื่อตามตัวกรอง</td></tr>}</tbody></table></div>
+        <div style={{fontSize:12.5,color:SUB,marginBottom:12,lineHeight:1.6}}>รายชื่อจะถูกเก็บเป็น “รายชื่อกลาง” ของห้อง (ใช้ซ้ำเมื่อนำเข้ารายวิชาภาคเรียนใหม่) และเติมเข้าวิชาที่ห้องตรงกัน — นักเรียนที่มีอยู่แล้ว (จับคู่ด้วยเลขประจำตัว/ชื่อ) จะอัปเดตเลขที่และชื่อ ไม่ลบใคร</div>
+        <Btn variant="primary" onClick={doRoster} disabled={busy||!rg.groups.length} style={{width:"100%"}}><Save size={16}/>{busy?"กำลังนำเข้า…":"ยืนยันนำเข้า "+rg.groups.reduce((a,g)=>a+g.students.length,0)+" คน"}</Btn>
+      </div>}
+    </Modal>
+
+    <Modal open={!!clr} onClose={()=>!busy&&setClr(null)} title="ล้างข้อมูลรายวิชาทั้งหมด" width={520}>
+      {clr && <div>
+        <div style={{background:"#fbeae8",color:"#c0392b",borderRadius:10,padding:"10px 12px",fontSize:13.5,lineHeight:1.6,marginBottom:12}}>จะลบถาวร: {subjects.length} รายวิชา · นักเรียน/เช็คชื่อ/คะแนน/ภาระงาน/บันทึกช่วยจำ/Q-Info ทั้งหมด กู้คืนไม่ได้</div>
+        <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:14,marginBottom:8,cursor:"pointer"}}><input type="checkbox" checked={clr.backup} onChange={e=>setClr({...clr,backup:e.target.checked})} style={{width:18,height:18,marginTop:2}}/>ดาวน์โหลดไฟล์สำรอง (.xlsx) ก่อนล้าง (แนะนำ)</label>
+        <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:14,marginBottom:8,cursor:"pointer"}}><input type="checkbox" checked={clr.roster} onChange={e=>setClr({...clr,roster:e.target.checked})} style={{width:18,height:18,marginTop:2}}/>ล้างรายชื่อกลาง (roster) ด้วย — ปกติไม่ต้อง ใช้ซ้ำภาคเรียนหน้าได้</label>
+        <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:14,marginBottom:8,cursor:"pointer"}}><input type="checkbox" checked={clr.fixes} onChange={e=>setClr({...clr,fixes:e.target.checked})} style={{width:18,height:18,marginTop:2}}/>ล้างงานแก้ 0 ร มส ด้วย — ปกติไม่ต้อง เพราะต้องติดตามข้ามภาคเรียน</label>
+        <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:14,marginBottom:12,cursor:"pointer",opacity:GAS.url?1:.5}}><input type="checkbox" disabled={!GAS.url} checked={clr.gas} onChange={e=>setClr({...clr,gas:e.target.checked})} style={{width:18,height:18,marginTop:2}}/>ล้างรายวิชาในชีต Subjects ด้วย (บันทึกช่วยจำเก่ายังอยู่ในชีต Notes)</label>
+        <Field label="ภาคเรียนถัดไป (ตั้งให้อัตโนมัติ แก้ได้)"><input style={inputStyle} value={clr.nextSem} onChange={e=>setClr({...clr,nextSem:e.target.value})} placeholder="2/2569"/></Field>
+        <Field label="พิมพ์คำว่า ล้างข้อมูล เพื่อยืนยัน"><input style={inputStyle} value={clr.text} onChange={e=>setClr({...clr,text:e.target.value})}/></Field>
+        <Btn variant="danger" onClick={doClear} disabled={busy||clr.text.trim()!=="ล้างข้อมูล"} style={{width:"100%"}}><Trash2 size={16}/>{busy?"กำลังล้าง…":"ล้างข้อมูลทั้งหมด"}</Btn>
+      </div>}
+    </Modal>
+  </div>;
+}
+
+function SettingsView({subjects,students,setStudents,logoUrl,setLogoUrl,app}){
   const persist=usePersist();
   const [target,setTarget]=useState((subjects[0]&&subjects[0].id)||"");
   const [pasteText,setPasteText]=useState("");
@@ -1745,6 +2104,7 @@ function SettingsView({subjects,students,setStudents,logoUrl,setLogoUrl}){
   const removeStudent=(id)=>{ setStudents(p=>({...p,[target]:(p[target]||[]).filter(s=>s.id!==id)})); persist.deleteStudent(id); };
   return <div style={{display:"grid",gap:14}}>
     <h2 style={{margin:0,fontSize:19,color:C.navy}}>ตั้งค่าระบบ</h2>
+    <TermPanels app={app}/>
     <div style={panel}>
       <div style={panelHead}><Upload size={18}/> นำเข้ารายชื่อนักเรียน</div>
       <Field label="เลือกรายวิชา"><select style={inputStyle} value={target} onChange={e=>setTarget(e.target.value)}>
