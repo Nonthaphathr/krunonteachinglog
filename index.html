@@ -4,6 +4,17 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <title>บันทึกการสอนครูนนท์</title>
+<meta name="theme-color" content="#1f3a5f" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Teaching Log" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<script>
+/* เก็บเหตุการณ์ "ติดตั้งแอป" ไว้ตั้งแต่ต้น (อาจเกิดก่อนที่ React จะเริ่มทำงาน) + ลงทะเบียน service worker */
+window.__bip=null;
+window.addEventListener("beforeinstallprompt",function(e){ e.preventDefault(); window.__bip=e; window.dispatchEvent(new Event("bip-ready")); });
+if("serviceWorker" in navigator && location.protocol==="https:"){ window.addEventListener("load",function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); }); }
+</script>
 <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23c2703d'/%3E%3C/svg%3E" />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet" />
 
@@ -30,6 +41,7 @@
     .tl-modal-wrap{ align-items:center !important; padding:20px !important; }
     .tl-modal{ border-radius:16px !important; }
   }
+  @media (max-width:420px){ .tl-hide-sm{ display:none; } }
   .spin{ animation:sp 1s linear infinite; } @keyframes sp{ to{ transform:rotate(360deg); } }
 
   /* ----- โหมดกรอกเร็ว ----- */
@@ -334,6 +346,50 @@ function SectionHead({title,right}){ return <div style={{display:"flex",justifyC
   <h2 style={{margin:0,fontSize:19,color:C.navy}}>{title}</h2>{right}</div>; }
 function EmptyHint({text}){ return <div style={{gridColumn:"1/-1",textAlign:"center",color:SUB,padding:36,background:"#fff",border:"1px dashed "+C.border,borderRadius:12,fontSize:14.5}}>{text}</div>; }
 
+/* ---------- ติดตั้งเป็นแอปบนหน้าจอโฮม (PWA) — ไอคอนใช้โลโก้แอปที่ตั้งไว้ในหน้าตั้งค่า ---------- */
+function loadImgCors(src){ return new Promise((res,rej)=>{ const im=new Image(); im.crossOrigin="anonymous"; im.onload=()=>res(im); im.onerror=()=>rej(new Error("โหลดโลโก้ไม่ได้")); im.src=src; }); }
+/* วาดโลโก้ลงพื้นขาวสี่เหลี่ยมจัตุรัส (ไอคอนต้องทึบ ไม่โปร่งใส) — ไม่มีโลโก้จะใช้ตัวอักษร TL บนพื้นกรมท่า */
+function drawAppIcon(img,size,pad){
+  const c=document.createElement("canvas"); c.width=c.height=size; const x=c.getContext("2d");
+  x.fillStyle=img?"#ffffff":"#1f3a5f"; x.fillRect(0,0,size,size);
+  if(img){ const box=size*(1-2*pad), r=Math.min(box/img.width,box/img.height), w=img.width*r, h=img.height*r; x.drawImage(img,(size-w)/2,(size-h)/2,w,h); }
+  else{ x.fillStyle="#ffffff"; x.font="700 "+Math.round(size*.4)+"px sans-serif"; x.textAlign="center"; x.textBaseline="middle"; x.fillText("TL",size/2,size/2+size*.02); }
+  return c.toDataURL("image/png");
+}
+function setHeadLink(rel,href,attrs){
+  let l=document.querySelector('link[rel="'+rel+'"]'); if(!l){ l=document.createElement("link"); l.rel=rel; document.head.appendChild(l); }
+  l.href=href; Object.keys(attrs||{}).forEach(k=>l.setAttribute(k,attrs[k])); return l;
+}
+/* สร้าง manifest + apple-touch-icon จากโลโก้ ทุกครั้งที่โลโก้เปลี่ยน */
+function usePwaIcons(logoUrl){
+  useEffect(()=>{
+    let dead=false, blobUrl=null;
+    (async()=>{
+      let icons, apple, img=null;
+      if(logoUrl){ try{ img=await loadImgCors(logoUrl); }catch(e){ img=null; } }
+      try{
+        if(logoUrl&&!img) throw new Error("cors");           // โหลดแบบ CORS ไม่ได้ → ใช้ลิงก์ตรง
+        const a=drawAppIcon(img,192,.1), b=drawAppIcon(img,512,.1), m=drawAppIcon(img,512,.22);
+        icons=[{src:a,sizes:"192x192",type:"image/png",purpose:"any"},{src:b,sizes:"512x512",type:"image/png",purpose:"any"},{src:m,sizes:"512x512",type:"image/png",purpose:"maskable"}];
+        apple=drawAppIcon(img,180,.1);
+      }catch(e){
+        if(!logoUrl) return;
+        icons=[{src:logoUrl,sizes:"192x192 512x512",purpose:"any"}]; apple=logoUrl;
+      }
+      if(dead) return;
+      const base=location.origin+location.pathname;
+      const manifest={id:base,name:"บันทึกการสอนครูนนท์",short_name:"Teaching Log",description:"บันทึกเช็กชื่อ คะแนน และเนื้อหาการสอน",
+        start_url:base,scope:base,display:"standalone",orientation:"portrait",background_color:"#f1f4f8",theme_color:"#1f3a5f",lang:"th",icons};
+      blobUrl=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:"application/manifest+json"}));
+      setHeadLink("manifest",blobUrl);
+      setHeadLink("apple-touch-icon",apple,{sizes:"180x180"});
+    })();
+    return ()=>{ dead=true; if(blobUrl) setTimeout(()=>URL.revokeObjectURL(blobUrl),1000); };
+  },[logoUrl]);
+}
+const isStandalone=()=>{ try{ return (window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)||window.navigator.standalone===true; }catch(e){ return false; } };
+const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent||"")||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+
 /* ==================== APP ==================== */
 function App(){
   const [subjects,setSubjects]=useState([]);
@@ -353,6 +409,19 @@ function App(){
   const [view,setView]=useState("home");
   const [activeSubj,setActiveSubj]=useState(null);
   const persist = useMemo(()=>makePersist(),[]);
+  const [installEv,setInstallEv]=useState(()=>window.__bip||null);
+  const [showInstall,setShowInstall]=useState(false);
+  const [standalone,setStandalone]=useState(isStandalone());
+  usePwaIcons(logoUrl);
+  useEffect(()=>{
+    const onReady=()=>setInstallEv(window.__bip||null), onDone=()=>{ window.__bip=null; setInstallEv(null); setStandalone(true); };
+    window.addEventListener("bip-ready",onReady); window.addEventListener("appinstalled",onDone);
+    return ()=>{ window.removeEventListener("bip-ready",onReady); window.removeEventListener("appinstalled",onDone); };
+  },[]);
+  const doInstall=async()=>{
+    if(installEv){ try{ installEv.prompt(); await installEv.userChoice; }catch(e){} window.__bip=null; setInstallEv(null); }
+    else setShowInstall(true);
+  };
   const [loadedSubj,setLoadedSubj]=useState({});     // วิชาที่โหลดข้อมูลแล้ว
   const [subjErr,setSubjErr]=useState("");
   const loadingRef=useRef({}), rosterRef=useRef(null), subjectsRef=useRef([]), dataRef=useRef({});
@@ -455,6 +524,7 @@ function App(){
           <div style={{fontWeight:700,fontSize:16,lineHeight:1.15}}>บันทึกการสอนครูนนท์</div>
           <div style={{fontSize:12,color:"#b9c6d6"}}>{view==="home"?"รายวิชาที่รับผิดชอบ":view==="fix"?"งานแก้ 0 ร มส":subj?subj.name+" · "+subj.room:"ตั้งค่าระบบ"}</div>
         </div>
+        {!standalone && <button onClick={doInstall} title="เพิ่มไปที่หน้าจอโฮม" style={{background:"rgba(255,255,255,.12)",border:"none",color:"#fff",borderRadius:8,padding:"8px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit",fontSize:13,fontWeight:600}}><Download size={18}/><span className="tl-hide-sm">ติดตั้งแอป</span></button>}
         <button onClick={()=>setView("settings")} title="ตั้งค่า" style={{background:view==="settings"?C.accent:"rgba(255,255,255,.12)",border:"none",color:"#fff",borderRadius:8,padding:8,cursor:"pointer",display:"flex"}}><Settings size={20}/></button>
       </div>
     </header>
@@ -474,6 +544,20 @@ function App(){
       {view==="settings" && <SettingsView subjects={subjects} students={students} setStudents={setStudents} logoUrl={logoUrl} setLogoUrl={setLogoUrl}
         app={{subjects,setSubjects,students,setStudents,attendance,setAttendance,assignments,setAssignments,scores,setScores,notes,setNotes,qinfo,setQinfo,fixes,setFixes,term,setTerm,rosters,setRosters,loadedSubj,ensureSubject,ensureSubjects,ensureAll,ensureRosters,markLoaded,resetLoaded,syncCount,dataRef}}/>}
     </main>
+    <Modal open={showInstall} onClose={()=>setShowInstall(false)} title="เพิ่มไปที่หน้าจอโฮม" width={480}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+        {logoUrl?<img src={logoUrl} alt="logo" style={{width:56,height:56,borderRadius:14,objectFit:"cover",border:"1px solid "+C.border,background:"#fff"}}/>
+          :<div style={{width:56,height:56,borderRadius:14,background:C.navy,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:20}}>TL</div>}
+        <div style={{fontSize:14,color:SUB,lineHeight:1.5}}><b style={{color:C.navy}}>บันทึกการสอนครูนนท์</b><br/>{logoUrl?"ไอคอนใช้โลโก้ของระบบ":"ยังไม่ได้ตั้งโลโก้ (ตั้งได้ที่ ตั้งค่า → โลโก้ระบบ)"}</div>
+      </div>
+      {(()=>{ const ios=isIOS(); const box=(t,items,on)=><div style={{border:"1px solid "+(on?C.accent:C.border),background:on?C.accentSoft:"#fff",borderRadius:12,padding:"11px 14px",marginBottom:10}}>
+        <div style={{fontWeight:700,color:C.navy,marginBottom:4}}>{t}</div><ol style={{margin:0,paddingLeft:20,fontSize:14,lineHeight:1.7}}>{items.map((x,i)=><li key={i}>{x}</li>)}</ol></div>;
+        return <div>
+          {box("iPhone / iPad (ใช้ Safari)",["แตะปุ่ม แชร์ (สี่เหลี่ยมมีลูกศรชี้ขึ้น) ด้านล่างหรือด้านบนของ Safari","เลื่อนรายการลง เลือก “เพิ่มไปยังหน้าจอโฮม”","แตะ “เพิ่ม” ไอคอนจะขึ้นบนหน้าจอโฮม"],ios)}
+          {box("Android (ใช้ Chrome)",["แตะเมนู ⋮ มุมขวาบน","เลือก “ติดตั้งแอป” หรือ “เพิ่มลงในหน้าจอหลัก”","ยืนยัน แล้วเปิดจากไอคอนบนหน้าจอ"],!ios&&/android/i.test(navigator.userAgent||""))}
+          {box("คอมพิวเตอร์ (Chrome / Edge)",["กดไอคอนติดตั้ง (จอพร้อมลูกศร) ท้ายช่องที่อยู่เว็บ หรือเมนู ⋮ → “ติดตั้ง …”"],false)}
+          <div style={{fontSize:12.5,color:SUB,marginTop:4}}>เมื่อเปิดจากไอคอนจะขึ้นเต็มจอเหมือนแอป และปุ่ม “ติดตั้งแอป” จะหายไปเอง</div></div>; })()}
+    </Modal>
   </div>
   </PersistCtx.Provider>;
 }
@@ -1852,6 +1936,28 @@ function downloadSubjectTemplate(){
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"รายวิชา"); XLSX.utils.book_append_sheet(wb,help,"วิธีกรอก");
   XLSX.writeFile(wb,"template_รายวิชา.xlsx");
 }
+/* template รายชื่อนักเรียน: หัวคอลัมน์เดียวกับไฟล์ที่ Export จากระบบสารสนเทศชั้นเรียน (ชั้น/ห้อง · เลขประจำตัว · ชื่อ-สกุล) */
+const ROSTER_HEAD=["ลำดับ","ชั้น/ห้อง","เลขประจำตัวนักเรียน","ชื่อ-สกุลนักเรียน","ชื่อเล่น","เพศ"];
+function downloadRosterTemplate(){
+  const aoa=[ROSTER_HEAD,
+    ["1","ม.1/1","10001","ตัวอย่าง: เด็กชายสมชาย ใจดี","ชาย","ชาย"],
+    ["2","ม.1/1","10002","ตัวอย่าง: เด็กหญิงสมหญิง รักเรียน","หญิง","หญิง"]];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  for(let r=1;r<aoa.length;r++){ [0,2].forEach(c=>{ const ref=XLSX.utils.encode_cell({r,c}); if(ws[ref]){ ws[ref].t="s"; ws[ref].z="@"; } }); }   // เลขประจำตัวเป็นข้อความ เลข 0 นำหน้าไม่หาย
+  ws["!cols"]=[8,12,20,34,12,8].map(w=>({wch:w}));
+  ROSTER_HEAD.forEach((_,c)=>{ const ref=XLSX.utils.encode_cell({r:0,c}); ws[ref].s={fill:{patternType:"solid",fgColor:{rgb:"1F3A5F"}},font:{color:{rgb:"FFFFFF"},bold:true},alignment:{horizontal:"center"}}; });
+  const help=XLSX.utils.aoa_to_sheet([["วิธีกรอก template รายชื่อนักเรียน"],
+    ["1) กรอกที่ชีต “รายชื่อ” 1 แถว = นักเรียน 1 คน ลบหรือพิมพ์ทับแถวตัวอย่าง (ชื่อขึ้นต้น “ตัวอย่าง:” จะไม่ถูกนำเข้า)"],
+    ["2) ชั้น/ห้อง: เช่น ม.1/1 — ต้องตรงกับห้องของรายวิชาที่นำเข้าไว้ จึงจะเติมรายชื่อเข้าวิชาให้อัตโนมัติ (1 ไฟล์ใส่ได้หลายห้อง)"],
+    ["3) ชื่อ-สกุลนักเรียน: ใส่คำนำหน้าด้วย เช่น เด็กชายสมชาย ใจดี"],
+    ["4) ลำดับ = เลขที่ในห้อง ถ้าเว้นว่าง ระบบจะเรียงตามเลขประจำตัวแล้วให้เลขที่ให้เอง"],
+    ["5) เลขประจำตัว ถ้าขึ้นต้นด้วย 0 ให้พิมพ์เป็นข้อความ (template ตั้งไว้ให้แล้ว)"],
+    ["6) ใช้ไฟล์ที่ Export จากระบบสารสนเทศชั้นเรียนได้โดยตรง ไม่ต้องแปลงรูปแบบ"],
+    ["7) บันทึกเป็น .xlsx หรือ .csv แล้วนำเข้าที่ ตั้งค่า → นำเข้ารายชื่อนักเรียนตามระดับชั้น"]]);
+  help["!cols"]=[{wch:110}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"รายชื่อ"); XLSX.utils.book_append_sheet(wb,help,"วิธีกรอก");
+  XLSX.writeFile(wb,"template_รายชื่อนักเรียน.xlsx");
+}
 function parseSubjectsWorkbook(wb){
   const items=[], warnings=[], seen=new Set();
   wb.SheetNames.forEach(sn=>{
@@ -1895,7 +2001,7 @@ async function readRosterFile(file){
     const cN=find(ROS_NAME), cI=find(ROS_ID), cNo=find(ROS_NO), cR=find(ROS_ROOM), cS=find(ROS_SEX);
     const sheetRoom=normRoom(sn,true);
     rows.slice(hi+1).forEach(r=>{
-      const name=String(r[cN]==null?"":r[cN]).replace(/\s+/g," ").trim(); if(!name) return;
+      const name=String(r[cN]==null?"":r[cN]).replace(/\s+/g," ").trim(); if(!name||/^ตัวอย่าง/.test(name)) return;
       const room=(cR>=0?normRoom(r[cR]):"")||sheetRoom||fileRoom||"";
       const no=cNo>=0?parseInt(String(r[cNo]).trim(),10):NaN;
       out.push({room,name,studentId:cI>=0?String(r[cI]==null?"":r[cI]).trim().replace(/\.0+$/,""):"",number:isNaN(no)?null:no,gender:cS>=0?String(r[cS]||"").trim():""});
@@ -2062,7 +2168,10 @@ function TermPanels({app}){
       <div style={panelHead}><Upload size={18}/> นำเข้ารายชื่อนักเรียนตามระดับชั้น</div>
       <div style={{fontSize:13.5,color:SUB,lineHeight:1.6,marginBottom:10}}>เลือกไฟล์ที่ Export จากระบบสารสนเทศชั้นเรียน (รายชื่อนักเรียน_ม…xlsx) หรือไฟล์ใบมอบตัว .csv เลือกได้หลายไฟล์พร้อมกัน ระบบจับห้องจากคอลัมน์ ชั้น/ห้อง ชื่อชีต หรือชื่อไฟล์ แล้วเติมรายชื่อเข้าวิชาที่ห้องตรงกัน (ไม่ลบนักเรียนเดิม จึงไม่กระทบคะแนน)
         {Object.keys(rosters).length>0 && <span> · รายชื่อกลางที่มีอยู่ตอนนี้ {Object.keys(rosters).length} ห้อง</span>}</div>
-      <Btn variant="accent" onClick={()=>rosRef.current&&rosRef.current.click()}><Upload size={15}/>เลือกไฟล์รายชื่อ (.xlsx / .csv)</Btn>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        <Btn variant="ghost" onClick={downloadRosterTemplate}><Download size={15}/>ดาวน์โหลด template รายชื่อ</Btn>
+        <Btn variant="accent" onClick={()=>rosRef.current&&rosRef.current.click()}><Upload size={15}/>เลือกไฟล์รายชื่อ (.xlsx / .csv)</Btn>
+      </div>
       <input ref={rosRef} type="file" multiple accept=".xlsx,.xls,.csv" onChange={onRosFile} style={{display:"none"}}/>
     </div>
 
